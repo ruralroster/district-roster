@@ -6,6 +6,7 @@ import Profile from './Profile';
 import Doctors from './Doctors';
 import Sites from './Sites';
 import Admin from './Admin';
+import Calendar from './Calendar';
 
 export default function App() {
   const [session, setSession] = useState(undefined);
@@ -35,6 +36,7 @@ function Home({ user }) {
   const [isOfficer, setIsOfficer] = useState(false);
   const [me, setMe] = useState(null);
   const [sites, setSites] = useState([]);
+  const [officerSiteIds, setOfficerSiteIds] = useState(new Set());
   const [tab, setTab] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => setReloadKey((k) => k + 1);
@@ -59,6 +61,7 @@ function Home({ user }) {
       setMe(null);
       setIsOfficer(false);
       setSites([]);
+      setOfficerSiteIds(new Set());
       return;
     }
     (async () => {
@@ -69,11 +72,15 @@ function Home({ user }) {
       ]);
       setMe(meRes.data ?? null);
       setIsOfficer(!!offRes.data);
-      setSites(sitesRes.data ?? []);
+      const siteList = sitesRes.data ?? [];
+      setSites(siteList);
+      const checks = await Promise.all(siteList.map((st) => supabase.rpc('is_site_officer', { p_site_id: st.site_id })));
+      setOfficerSiteIds(new Set(siteList.filter((_, i) => checks[i].data).map((st) => st.site_id)));
     })();
   }, [districtId, user.id, reloadKey]);
 
   const tabs = [
+    (me || officerSiteIds.size > 0) && ['calendar', 'Calendar'],
     me && ['profile', 'My profile'],
     isOfficer && ['doctors', 'Doctors'],
     districtId && ['sites', 'Sites'],
@@ -119,6 +126,7 @@ function Home({ user }) {
         </nav>
       )}
 
+      {activeTab === 'calendar' && <Calendar districtId={districtId} sites={sites} me={me} officerSiteIds={officerSiteIds} />}
       {activeTab === 'profile' && me && <Profile doctor={me} sites={sites} onSaved={reload} />}
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}
       {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} />}

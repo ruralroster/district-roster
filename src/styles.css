@@ -75,3 +75,58 @@ button.danger { color: var(--danger); }
 .small { font-size: 0.85rem; }
 .error { color: var(--danger); margin: 0; }
 .ok { color: var(--ok); margin: 0; }
+
+.badge.open { background: #ef4444; border-color: #dc2626; color: #fff; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+
+.segmented { display: inline-flex; align-self: flex-start; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.segmented button { border: none; border-radius: 0; background: var(--card); color: var(--text); }
+.segmented button.active { background: var(--accent); color: var(--accent-text); }
+
+/* Calendar: same look as roster-app's officer Calendar tab (its Tailwind
+   classes: max-w-2xl, aspect-square tiles, gap-2, border-2, rounded-lg,
+   ring-2 ring-blue-600 for today, and the same status colours). */
+.cal-card { width: 100%; max-width: 672px; margin: 0 auto; background: #fff; color: #111827; border-radius: 8px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); padding: 24px; }
+.cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.cal-header h2 { margin: 0; font-size: 1.125rem; font-weight: 700; color: #111827; text-align: center; }
+.cal-nav { display: flex; padding: 8px; border: none; border-radius: 8px; background: transparent; color: #111827; }
+.cal-nav:hover { background: #f3f4f6; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.cal-daynames { margin-bottom: 4px; }
+.cal-daynames div { text-align: center; font-size: 0.75rem; font-weight: 700; color: #4b5563; padding: 8px 0; }
+.cal-week { margin-bottom: 12px; }
+.cal-day {
+  position: relative; aspect-ratio: 1 / 1; padding: 8px; border-radius: 8px; border: 2px solid;
+  font-weight: 600; font-size: 0.875rem; line-height: 1.25rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.cal-month { font-size: 10px; font-weight: 500; text-transform: uppercase; opacity: 0.75; line-height: 1; }
+.cal-today { box-shadow: 0 0 0 1px #fff, 0 0 0 3px #2563eb; }
+.cal-selected { box-shadow: 0 0 0 1px #fff, 0 0 0 3px #111827; }
+.cal-count {
+  position: absolute; top: -6px; right: -6px; padding: 2px 5px; border-radius: 999px;
+  background: #fff; color: #7e22ce; border: 1px solid #d8b4fe; font-size: 9px; font-weight: 700; line-height: 1;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.cal-count.static { position: static; box-shadow: none; }
+
+.cal-none { background: #fff; border-color: #e5e7eb; color: #111827; }
+.cal-none:hover { border-color: #3b82f6; background: #eff6ff; }
+.cal-filled, .cal-booked { background: #22c55e; border-color: #16a34a; color: #fff; }
+.cal-filled:hover, .cal-booked:hover { background: #16a34a; }
+.cal-open { background: #ef4444; border-color: #dc2626; color: #fff; }
+.cal-open:hover { background: #dc2626; }
+.cal-available { background: #0ea5e9; border-color: #0284c7; color: #fff; }
+.cal-available:hover { background: #0284c7; }
+
+.cal-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.cal-legend div { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #4b5563; }
+.cal-swatch { width: 12px; height: 12px; border-radius: 4px; border: 1px solid; }
+.cal-swatch.cal-none { border-color: #d1d5db; }
+
+@media (max-width: 480px) {
+  .cal-card { padding: 12px; }
+  .cal-grid { gap: 4px; }
+  .cal-day { padding: 2px; font-size: 0.8rem; }
+}
