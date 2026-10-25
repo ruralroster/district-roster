@@ -19,6 +19,7 @@ const STATUS_STYLES = {
     available: { label: 'Shifts you can apply for' },
     applied: { label: "You've applied" },
     booked: { label: "You're booked" },
+    unavailable: { label: 'Not available' },
   },
 };
 
@@ -33,6 +34,8 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   const [notices, setNotices] = useState([]);
   // Doctors see their own; officers their sites' (RLS).
   const [applications, setApplications] = useState([]);
+  // Days the doctor has marked themselves unavailable ("2026-11-03").
+  const [unavailable, setUnavailable] = useState(new Set());
   const [doctors, setDoctors] = useState([]);
   const [shiftTypes, setShiftTypes] = useState([]);
   const [error, setError] = useState('');
@@ -65,7 +68,16 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
       ? await supabase.from('district_applications').select('*').in('notice_id', ids).order('created_at')
       : { data: [] };
     setApplications(apps ?? []);
-  }, [districtId, rangeStart, rangeEnd]);
+    if (me) {
+      const { data: days } = await supabase
+        .from('district_unavailable_days')
+        .select('date')
+        .eq('doctor_id', me.doctor_id)
+        .gte('date', rangeStart)
+        .lte('date', rangeEnd);
+      setUnavailable(new Set((days ?? []).map((d) => d.date)));
+    }
+  }, [districtId, rangeStart, rangeEnd, me]);
 
   useEffect(() => {
     load();
@@ -113,6 +125,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
     }
     if (list.some((n) => n.filled_by_doctor_id === me?.doctor_id)) return { status: 'booked', count: openCount };
     if (list.some((n) => myApplication(n.notice_id)?.status === 'pending')) return { status: 'applied', count: openCount };
+    if (unavailable.has(dateStr)) return { status: 'unavailable', count: 0 };
     return { status: openCount > 0 ? 'available' : 'none', count: openCount };
   }
 
@@ -200,6 +213,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
           date={selectedDate}
           notices={relevant.filter((n) => n.shift_date === toLocalDateStr(selectedDate))}
           applications={applications}
+          unavailable={unavailable.has(toLocalDateStr(selectedDate))}
           view={view}
           sites={sites}
           doctors={doctors}
@@ -224,7 +238,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   );
 }
 
-function DayPanel({ date, notices, applications, view, sites, doctors, me, onChanged }) {
+function DayPanel({ date, notices, applications, unavailable, view, sites, doctors, me, onChanged }) {
   const [error, setError] = useState('');
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
   const doctorName = (id) => doctors.find((d) => d.doctor_id === id)?.name ?? (id === me?.doctor_id ? 'You' : 'A district doctor');
@@ -232,6 +246,16 @@ function DayPanel({ date, notices, applications, view, sites, doctors, me, onCha
   async function update(notice, changes) {
     setError('');
     const { error } = await supabase.from('district_notices').update(changes).eq('notice_id', notice.notice_id);
+    if (error) setError(error.message);
+    onChanged();
+  }
+
+  async function setAvailable(available) {
+    setError('');
+    const dateStr = toLocalDateStr(date);
+    const { error } = available
+      ? await supabase.from('district_unavailable_days').delete().eq('doctor_id', me.doctor_id).eq('date', dateStr)
+      : await supabase.from('district_unavailable_days').insert({ doctor_id: me.doctor_id, date: dateStr });
     if (error) setError(error.message);
     onChanged();
   }
@@ -291,6 +315,19 @@ function DayPanel({ date, notices, applications, view, sites, doctors, me, onCha
           </li>
         ))}
       </ul>
+      {view === 'doctor' && me && (
+        <div className="inline small">
+          {unavailable ? (
+            <>
+              <span className="badge">You've marked this day unavailable</span>
+              <button className="link" onClick={() => setAvailable(true)}>I'm available after all</button>
+            </>
+          ) : (
+            <button className="secondary" onClick={() => setAvailable(false)}>I'm not available this day</button>
+          )}
+          <span className="muted">You won't be told about new shifts on days you're not available.</span>
+        </div>
+      )}
       {error && <p className="error">{error}</p>}
     </div>
   );

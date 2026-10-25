@@ -1,9 +1,12 @@
 // district-notify: DR Roster's emails and phone notifications.
 //
-// Run every 5 minutes (6:00-22:00 Brisbane) by pg_cron with the
-// x-cron-secret header (see migrations/2026-10-27_applications_notifications.sql).
-// Each run sends whatever's waiting, one email and one push per person:
-//   - new open shifts, to active doctors whose skills fit
+// Run every 30 minutes (6:00-21:00 Brisbane) by pg_cron with the
+// x-cron-secret header (see migrations/2026-10-27b_notify_rules.sql). Each
+// run sends whatever's waiting, one email and one push per person; a run
+// with nothing new sends nothing:
+//   - new open shifts, to doctors who'd work at that site, whose skills
+//     fit, who aren't marked unavailable and are rested (10 hours either
+//     side; the rules are in SQL: district_notice_recipients)
 //   - applications and withdrawals, to the site's officers (its
 //     site_officers, plus roster-app officers of a linked department)
 //   - approved / declined / booking cancelled, to the doctor
@@ -130,32 +133,37 @@ async function newShifts(admin) {
     .select('*, sites(name)');
   if (error) throw error;
   const today = brisbaneToday();
-  const notices = (claimed ?? []).filter((n) => n.status === 'open' && n.shift_date >= today);
+  const notices = (claimed ?? [])
+    .filter((n) => n.status === 'open' && n.shift_date >= today)
+    .sort((a, b) => a.shift_date.localeCompare(b.shift_date) || a.start_time.localeCompare(b.start_time));
   if (!notices.length) return 0;
 
+  const { data: pairs, error: pairsError } = await admin.rpc('district_notice_recipients', {
+    p_notice_ids: notices.map((n) => n.notice_id),
+  });
+  if (pairsError) throw pairsError;
+  const doctorIds = [...new Set((pairs ?? []).map((p) => p.doctor_id))];
+  if (!doctorIds.length) return 0;
+  const { data: doctors } = await admin
+    .from('district_doctors')
+    .select('doctor_id, user_id, email, name, notify_email, notify_push')
+    .in('doctor_id', doctorIds);
+
   let told = 0;
-  for (const districtId of new Set(notices.map((n) => n.district_id))) {
-    const here = notices.filter((n) => n.district_id === districtId).sort((a, b) => a.shift_date.localeCompare(b.shift_date));
-    const { data: doctors } = await admin
-      .from('district_doctors')
-      .select('user_id, email, name, skills, notify_email, notify_push')
-      .eq('district_id', districtId)
-      .eq('active', true)
-      .not('user_id', 'is', null);
-    for (const d of doctors ?? []) {
-      const fits = here.filter((n) => d.skills.includes(n.required_skill));
-      if (!fits.length) continue;
-      const lines = fits.map(shiftLine);
-      const one = fits.length === 1;
-      await tell(admin, { email: d.email, userId: d.user_id, wantsEmail: d.notify_email, wantsPush: d.notify_push }, {
-        subject: one ? `New shift: ${fits[0].sites?.name} ${dayLabel(fits[0].shift_date)}` : `${plural(fits.length, 'new shift')} you can do`,
-        intro: `Hi ${d.name.split(' ')[0]}, ${one ? 'a new shift has' : `${fits.length} new shifts have`} been posted that you can do:`,
-        lines,
-        pushTitle: one ? 'New shift you can do' : `${plural(fits.length, 'new shift')} you can do`,
-        tag: 'new-shifts',
-      });
-      told++;
-    }
+  for (const d of doctors ?? []) {
+    const mine = new Set(pairs.filter((p) => p.doctor_id === d.doctor_id).map((p) => p.notice_id));
+    const fits = notices.filter((n) => mine.has(n.notice_id));
+    if (!fits.length) continue;
+    const lines = fits.map(shiftLine);
+    const one = fits.length === 1;
+    await tell(admin, { email: d.email, userId: d.user_id, wantsEmail: d.notify_email, wantsPush: d.notify_push }, {
+      subject: one ? `New shift: ${fits[0].sites?.name} ${dayLabel(fits[0].shift_date)}` : `${plural(fits.length, 'new shift')} you can do`,
+      intro: `Hi ${d.name.split(' ')[0]}, ${one ? 'a new shift has' : `${fits.length} new shifts have`} been posted that you can do:`,
+      lines,
+      pushTitle: one ? 'New shift you can do' : `${plural(fits.length, 'new shift')} you can do`,
+      tag: 'new-shifts',
+    });
+    told++;
   }
   return told;
 }

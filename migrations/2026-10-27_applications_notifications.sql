@@ -19,8 +19,8 @@
 --      doctors whose skills fit), district_applications.officer_notified_at
 --      (applied or withdrawn, to the site's officers) and
 --      .doctor_notified_at (approved, declined or booking cancelled, to the
---      doctor). The district-notify Edge Function, run every 5 minutes from
---      6:00 to 22:00 Brisbane, sends whatever's waiting, grouped, so
+--      doctor). The district-notify Edge Function, run on a timer (every 30
+--      minutes, 6:00-21:00 Brisbane; see 2026-10-27b), sends what's waiting, grouped, so
 --      posting 20 shifts is one email, not 20. Doctors who've never logged
 --      in (imported, not yet invited) are never emailed.
 --
@@ -396,7 +396,8 @@ $$;
 REVOKE EXECUTE ON FUNCTION district_notify_secret_ok(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION district_notify_secret_ok(text) TO service_role;
 
--- Every 5 minutes, 6:00-21:55 Brisbane (UTC+10) = 20:00-11:55 UTC.
+-- Every 5 minutes, 6:00-21:55 Brisbane (UTC+10) = 20:00-11:55 UTC. 2026-10-27b_notify_rules.sql
+-- changes this to every 30 minutes, 6:00-21:00.
 -- Anything after 22:00 waits for the morning.
 SELECT cron.schedule(
   'district-notify',

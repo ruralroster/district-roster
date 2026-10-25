@@ -10,6 +10,7 @@ export default function Profile({ doctor, sites, onSaved }) {
     skills: doctor.skills,
     notify_email: doctor.notify_email,
     notify_push: doctor.notify_push,
+    interested_site_ids: doctor.interested_site_ids ?? [],
   });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -30,6 +31,7 @@ export default function Profile({ doctor, sites, onSaved }) {
         skills: form.skills,
         notify_email: form.notify_email,
         notify_push: form.notify_push,
+        interested_site_ids: form.interested_site_ids,
       })
       .eq('doctor_id', doctor.doctor_id);
     setBusy(false);
@@ -66,6 +68,32 @@ export default function Profile({ doctor, sites, onSaved }) {
       <fieldset>
         <legend>Skills</legend>
         <SkillPicker value={form.skills} onChange={set('skills')} />
+      </fieldset>
+      <fieldset>
+        <legend>Sites I'd work at</legend>
+        <div className="checks">
+          {sites.map((s) => (
+            <label key={s.site_id} className="check">
+              <input
+                type="checkbox"
+                checked={form.interested_site_ids.includes(s.site_id)}
+                onChange={(e) =>
+                  set('interested_site_ids')(
+                    e.target.checked
+                      ? [...form.interested_site_ids, s.site_id]
+                      : form.interested_site_ids.filter((id) => id !== s.site_id),
+                  )
+                }
+              />
+              {s.name}
+            </label>
+          ))}
+        </div>
+        <p className="small muted">
+          You're only told about new shifts at these sites, and only when you're free: not on a day you've marked
+          unavailable, not starting within 10 hours of a shift you're on, and not finishing within 10 hours of a shift at
+          your primary site.
+        </p>
       </fieldset>
       <fieldset>
         <legend>Notifications</legend>

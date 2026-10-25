@@ -80,7 +80,7 @@ export default function ImportV3({ districts, onImported }) {
       people: going.map((p) => ({
         name: p.name,
         email: p.email.trim().toLowerCase(),
-        doctor: p.doctor ? { home_site: p.homeSite, skills: p.doctor.skills } : null,
+        doctor: p.doctor ? { home_site: p.homeSite, skills: p.doctor.skills, sites: p.doctor.sites } : null,
         officer_sites: p.officerSites,
       })),
     };
