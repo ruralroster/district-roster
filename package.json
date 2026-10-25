@@ -12,7 +12,8 @@
     "@supabase/supabase-js": "^2.118.0",
     "lucide-react": "^1.61.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",

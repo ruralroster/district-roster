@@ -130,3 +130,8 @@ button.danger { color: var(--danger); }
   .cal-grid { gap: 4px; }
   .cal-day { padding: 2px; font-size: 0.8rem; }
 }
+
+/* Import from v3 */
+.badge.guess { margin-left: 0; color: var(--danger); border-color: var(--danger); }
+.chip.check { gap: 6px; padding: 2px 10px; cursor: pointer; }
+.chip.check input { margin: 0; }
