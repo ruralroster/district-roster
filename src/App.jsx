@@ -92,7 +92,7 @@ function Home({ user }) {
   return (
     <div className="page">
       <header className="topbar">
-        <h1>District Roster</h1>
+        <h1>DR Roster</h1>
         <div className="topbar-right">
           {districts.length > 1 && (
             <select value={districtId ?? ''} onChange={(e) => setDistrictId(e.target.value)}>
