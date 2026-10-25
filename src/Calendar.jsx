@@ -36,6 +36,9 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   const [applications, setApplications] = useState([]);
   // Days the doctor has marked themselves unavailable ("2026-11-03").
   const [unavailable, setUnavailable] = useState(new Set());
+  // For the doctor: notice_id -> { interested, problem } for open shifts
+  // their skills fit. problem is why they can't do it (rest, unavailable).
+  const [availability, setAvailability] = useState(new Map());
   const [doctors, setDoctors] = useState([]);
   const [shiftTypes, setShiftTypes] = useState([]);
   const [error, setError] = useState('');
@@ -76,6 +79,12 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
         .gte('date', rangeStart)
         .lte('date', rangeEnd);
       setUnavailable(new Set((days ?? []).map((d) => d.date)));
+      const { data: avail } = await supabase.rpc('my_shift_availability', {
+        p_district_id: districtId,
+        p_from: rangeStart,
+        p_to: rangeEnd,
+      });
+      setAvailability(new Map((avail ?? []).map((a) => [a.notice_id, a])));
     }
   }, [districtId, rangeStart, rangeEnd, me]);
 
@@ -106,12 +115,14 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
     me && applications.filter((a) => a.notice_id === noticeId && a.doctor_id === me.doctor_id).at(-1);
 
   // The notices this view is about: officers see their own sites'; doctors
-  // see open ones their skills fit, plus anything they've applied for or
-  // are booked on.
+  // see open ones their skills fit at sites they'd work at, plus anything
+  // they've applied for or are booked on. canDo: open and nothing in the
+  // way (rest rules, unavailable day).
+  const canDo = (n) => n.status === 'open' && availability.has(n.notice_id) && !availability.get(n.notice_id).problem;
   const relevant = notices.filter((n) =>
     view === 'officer'
       ? officerSiteIds.has(n.site_id)
-      : (n.status === 'open' && me?.skills.includes(n.required_skill)) ||
+      : (n.status === 'open' && !!availability.get(n.notice_id)?.interested) ||
         (me && n.filled_by_doctor_id === me.doctor_id) ||
         !!myApplication(n.notice_id),
   );
@@ -123,10 +134,11 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
       if (openCount > 0) return { status: 'open', count: openCount };
       return { status: list.length > 0 ? 'filled' : 'none', count: 0 };
     }
-    if (list.some((n) => n.filled_by_doctor_id === me?.doctor_id)) return { status: 'booked', count: openCount };
-    if (list.some((n) => myApplication(n.notice_id)?.status === 'pending')) return { status: 'applied', count: openCount };
+    const canCount = list.filter(canDo).length;
+    if (list.some((n) => n.filled_by_doctor_id === me?.doctor_id)) return { status: 'booked', count: canCount };
+    if (list.some((n) => myApplication(n.notice_id)?.status === 'pending')) return { status: 'applied', count: canCount };
     if (unavailable.has(dateStr)) return { status: 'unavailable', count: 0 };
-    return { status: openCount > 0 ? 'available' : 'none', count: openCount };
+    return { status: canCount > 0 ? 'available' : 'none', count: canCount };
   }
 
   const today = new Date();
@@ -213,6 +225,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
           date={selectedDate}
           notices={relevant.filter((n) => n.shift_date === toLocalDateStr(selectedDate))}
           applications={applications}
+          availability={availability}
           unavailable={unavailable.has(toLocalDateStr(selectedDate))}
           view={view}
           sites={sites}
@@ -238,7 +251,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   );
 }
 
-function DayPanel({ date, notices, applications, unavailable, view, sites, doctors, me, onChanged }) {
+function DayPanel({ date, notices, applications, availability, unavailable, view, sites, doctors, me, onChanged }) {
   const [error, setError] = useState('');
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
   const doctorName = (id) => doctors.find((d) => d.doctor_id === id)?.name ?? (id === me?.doctor_id ? 'You' : 'A district doctor');
@@ -284,7 +297,9 @@ function DayPanel({ date, notices, applications, unavailable, view, sites, docto
                 {n.required_skill === 'Emergency' ? 'Any doctor' : `Needs ${n.required_skill}`}
                 {n.notes && ` · ${n.notes}`}
               </div>
-              {view === 'doctor' && <MyApplication notice={n} me={me} applications={applications} rpc={rpc} />}
+              {view === 'doctor' && (
+                <MyApplication notice={n} me={me} applications={applications} problem={availability.get(n.notice_id)?.problem} rpc={rpc} />
+              )}
               {view === 'officer' && n.status === 'open' && (
                 <Applicants notice={n} applications={applications} doctors={doctors} rpc={rpc} />
               )}
@@ -334,7 +349,7 @@ function DayPanel({ date, notices, applications, unavailable, view, sites, docto
 }
 
 // Doctor: apply (with an optional note), see where it's up to, withdraw.
-function MyApplication({ notice, me, applications, rpc }) {
+function MyApplication({ notice, me, applications, problem, rpc }) {
   const [applying, setApplying] = useState(false);
   const [note, setNote] = useState('');
   const mine = applications.filter((a) => a.notice_id === notice.notice_id && a.doctor_id === me?.doctor_id).at(-1);
@@ -356,6 +371,7 @@ function MyApplication({ notice, me, applications, rpc }) {
     withdrawn: 'You withdrew',
   }[mine.status];
   if (notice.status !== 'open') return before ? <div className="small muted">{before}</div> : null;
+  if (problem) return <div className="small muted">Not for you: {problem}</div>;
 
   return (
     <div className="stack small">
