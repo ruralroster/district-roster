@@ -6,6 +6,7 @@ import Profile from './Profile';
 import Doctors from './Doctors';
 import Sites from './Sites';
 import Admin from './Admin';
+import Notifications from './Notifications';
 import Calendar from './Calendar';
 
 export default function App() {
@@ -81,7 +82,7 @@ function Home({ user }) {
 
   const tabs = [
     (me || officerSiteIds.size > 0) && ['calendar', 'Calendar'],
-    me && ['profile', 'My profile'],
+    (me || officerSiteIds.size > 0) && ['profile', me ? 'My profile' : 'Notifications'],
     isOfficer && ['doctors', 'Doctors'],
     districtId && ['sites', 'Sites'],
     isSuperAdmin && ['admin', 'Admin'],
@@ -127,7 +128,18 @@ function Home({ user }) {
       )}
 
       {activeTab === 'calendar' && <Calendar districtId={districtId} sites={sites} me={me} officerSiteIds={officerSiteIds} />}
-      {activeTab === 'profile' && me && <Profile doctor={me} sites={sites} onSaved={reload} />}
+      {activeTab === 'profile' && (
+        <div className="stack">
+          {me && <Profile doctor={me} sites={sites} onSaved={reload} />}
+          <Notifications
+            userId={user.id}
+            intro={[
+              me && "You're told about new shifts your skills fit, and when you're booked or not. Choose email and/or phone above.",
+              officerSiteIds.size > 0 && "As an officer, you're emailed and sent a phone notification when someone applies for or withdraws from your sites' shifts.",
+            ].filter(Boolean).join(' ')}
+          />
+        </div>
+      )}
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}
       {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} officerSiteIds={officerSiteIds} />}
       {activeTab === 'admin' && <Admin districts={districts} onChanged={reload} />}

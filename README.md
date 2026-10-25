@@ -7,10 +7,10 @@ Live: https://ruralroster.github.io/district-roster/
 ## Setup
 
 - `migrations/`: run each file in the Supabase SQL Editor, in date order, after roster-app's migrations.
-- `supabase/functions/`: deploy with `supabase functions deploy <name>`. They use the same `SUPABASE_SERVICE_ROLE_KEY` secret as roster-app.
+- `supabase/functions/`: deploy with `supabase functions deploy <name>`. They use the same secrets as roster-app (`SUPABASE_SERVICE_ROLE_KEY`; `district-notify` also `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`). Each is one self-contained `index.ts`, so it can be pasted into the Supabase web editor. `district-notify` needs Verify JWT off (pg_cron calls it with its own secret).
 - Supabase Auth → URL Configuration → Redirect URLs must include `https://ruralroster.github.io/district-roster/*`.
 - Local: copy `.env.example` to `.env`, then `npm install` and `npm run dev`.
-- Deploys to GitHub Pages on every push to `main`. It needs the repo secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+- Deploys to GitHub Pages on every push to `main`. It needs the repo secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, and the repo variable `VITE_VAPID_PUBLIC_KEY` (roster-app's public push key).
 
 ## Who can do what
 

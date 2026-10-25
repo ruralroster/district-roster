@@ -17,6 +17,7 @@ const STATUS_STYLES = {
   doctor: {
     none: { label: 'Nothing for you' },
     available: { label: 'Shifts you can apply for' },
+    applied: { label: "You've applied" },
     booked: { label: "You're booked" },
   },
 };
@@ -30,6 +31,8 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()));
   const [selectedDate, setSelectedDate] = useState(null);
   const [notices, setNotices] = useState([]);
+  // Doctors see their own; officers their sites' (RLS).
+  const [applications, setApplications] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [shiftTypes, setShiftTypes] = useState([]);
   const [error, setError] = useState('');
@@ -57,6 +60,11 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
       .order('start_time');
     if (error) setError(error.message);
     setNotices(data ?? []);
+    const ids = (data ?? []).map((n) => n.notice_id);
+    const { data: apps } = ids.length
+      ? await supabase.from('district_applications').select('*').in('notice_id', ids).order('created_at')
+      : { data: [] };
+    setApplications(apps ?? []);
   }, [districtId, rangeStart, rangeEnd]);
 
   useEffect(() => {
@@ -81,12 +89,19 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
       .then(({ data }) => setShiftTypes(data ?? []));
   }, [districtId, isOfficer, officerSiteIds]);
 
+  // My latest application for a notice, if any.
+  const myApplication = (noticeId) =>
+    me && applications.filter((a) => a.notice_id === noticeId && a.doctor_id === me.doctor_id).at(-1);
+
   // The notices this view is about: officers see their own sites'; doctors
-  // see open ones their skills fit, plus anything they're booked on.
+  // see open ones their skills fit, plus anything they've applied for or
+  // are booked on.
   const relevant = notices.filter((n) =>
     view === 'officer'
       ? officerSiteIds.has(n.site_id)
-      : (n.status === 'open' && me?.skills.includes(n.required_skill)) || (me && n.filled_by_doctor_id === me.doctor_id),
+      : (n.status === 'open' && me?.skills.includes(n.required_skill)) ||
+        (me && n.filled_by_doctor_id === me.doctor_id) ||
+        !!myApplication(n.notice_id),
   );
 
   function dayStatus(dateStr) {
@@ -97,6 +112,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
       return { status: list.length > 0 ? 'filled' : 'none', count: 0 };
     }
     if (list.some((n) => n.filled_by_doctor_id === me?.doctor_id)) return { status: 'booked', count: openCount };
+    if (list.some((n) => myApplication(n.notice_id)?.status === 'pending')) return { status: 'applied', count: openCount };
     return { status: openCount > 0 ? 'available' : 'none', count: openCount };
   }
 
@@ -183,6 +199,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
         <DayPanel
           date={selectedDate}
           notices={relevant.filter((n) => n.shift_date === toLocalDateStr(selectedDate))}
+          applications={applications}
           view={view}
           sites={sites}
           doctors={doctors}
@@ -207,7 +224,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   );
 }
 
-function DayPanel({ date, notices, view, sites, doctors, me, onChanged }) {
+function DayPanel({ date, notices, applications, view, sites, doctors, me, onChanged }) {
   const [error, setError] = useState('');
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
   const doctorName = (id) => doctors.find((d) => d.doctor_id === id)?.name ?? (id === me?.doctor_id ? 'You' : 'A district doctor');
@@ -215,6 +232,14 @@ function DayPanel({ date, notices, view, sites, doctors, me, onChanged }) {
   async function update(notice, changes) {
     setError('');
     const { error } = await supabase.from('district_notices').update(changes).eq('notice_id', notice.notice_id);
+    if (error) setError(error.message);
+    onChanged();
+  }
+
+  // Runs an application RPC, then refreshes.
+  async function rpc(name, args) {
+    setError('');
+    const { error } = await supabase.rpc(name, args);
     if (error) setError(error.message);
     onChanged();
   }
@@ -235,6 +260,10 @@ function DayPanel({ date, notices, view, sites, doctors, me, onChanged }) {
                 {n.required_skill === 'Emergency' ? 'Any doctor' : `Needs ${n.required_skill}`}
                 {n.notes && ` · ${n.notes}`}
               </div>
+              {view === 'doctor' && <MyApplication notice={n} me={me} applications={applications} rpc={rpc} />}
+              {view === 'officer' && n.status === 'open' && (
+                <Applicants notice={n} applications={applications} doctors={doctors} rpc={rpc} />
+              )}
             </div>
             {view === 'officer' && (
               <div className="inline">
@@ -262,11 +291,86 @@ function DayPanel({ date, notices, view, sites, doctors, me, onChanged }) {
           </li>
         ))}
       </ul>
-      {view === 'doctor' && notices.some((n) => n.status === 'open') && (
-        <p className="muted small">Applying for shifts arrives in the next update.</p>
-      )}
       {error && <p className="error">{error}</p>}
     </div>
+  );
+}
+
+// Doctor: apply (with an optional note), see where it's up to, withdraw.
+function MyApplication({ notice, me, applications, rpc }) {
+  const [applying, setApplying] = useState(false);
+  const [note, setNote] = useState('');
+  const mine = applications.filter((a) => a.notice_id === notice.notice_id && a.doctor_id === me?.doctor_id).at(-1);
+
+  if (notice.filled_by_doctor_id === me?.doctor_id) return <span className="badge booked">You're booked</span>;
+  if (mine?.status === 'pending') {
+    return (
+      <div className="inline small">
+        <span className="badge applied">Applied</span>
+        <button className="link" onClick={() => window.confirm('Withdraw your application?') && rpc('withdraw_application', { p_application_id: mine.application_id })}>
+          Withdraw
+        </button>
+      </div>
+    );
+  }
+  const before = mine && {
+    declined: `Not this time${mine.decline_reason ? `: ${mine.decline_reason}` : ''}`,
+    cancelled: 'Your booking was cancelled',
+    withdrawn: 'You withdrew',
+  }[mine.status];
+  if (notice.status !== 'open') return before ? <div className="small muted">{before}</div> : null;
+
+  return (
+    <div className="stack small">
+      {before && <span className="muted">{before}</span>}
+      {applying ? (
+        <form
+          className="inline"
+          onSubmit={(e) => {
+            e.preventDefault();
+            rpc('apply_for_notice', { p_notice_id: notice.notice_id, p_note: note });
+            setApplying(false);
+            setNote('');
+          }}
+        >
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the officer (optional)" />
+          <button type="submit">Send application</button>
+          <button type="button" className="link" onClick={() => setApplying(false)}>Cancel</button>
+        </form>
+      ) : (
+        <div>
+          <button onClick={() => setApplying(true)}>{before ? 'Apply again' : 'Apply'}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Officer: who's applied for an open shift, to approve or decline.
+function Applicants({ notice, applications, doctors, rpc }) {
+  const waiting = applications.filter((a) => a.notice_id === notice.notice_id && a.status === 'pending');
+  if (!waiting.length) return <div className="small muted">No applications yet</div>;
+  const doctorName = (id) => doctors.find((d) => d.doctor_id === id)?.name ?? 'A doctor';
+  return (
+    <ul className="applicants small">
+      {waiting.map((a) => (
+        <li key={a.application_id}>
+          <span className="badge applied">Applied</span>
+          <strong>{doctorName(a.doctor_id)}</strong>
+          {a.note && <span className="muted">"{a.note}"</span>}
+          <button onClick={() => rpc('approve_application', { p_application_id: a.application_id })}>Approve</button>
+          <button
+            className="secondary"
+            onClick={() => {
+              const reason = window.prompt(`Decline ${doctorName(a.doctor_id)}? Add a reason for them if you like.`, '');
+              if (reason !== null) rpc('decline_application', { p_application_id: a.application_id, p_reason: reason });
+            }}
+          >
+            Decline
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
