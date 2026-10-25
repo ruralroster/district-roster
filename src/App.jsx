@@ -129,7 +129,7 @@ function Home({ user }) {
       {activeTab === 'calendar' && <Calendar districtId={districtId} sites={sites} me={me} officerSiteIds={officerSiteIds} />}
       {activeTab === 'profile' && me && <Profile doctor={me} sites={sites} onSaved={reload} />}
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}
-      {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} />}
+      {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} officerSiteIds={officerSiteIds} />}
       {activeTab === 'admin' && <Admin districts={districts} onChanged={reload} />}
     </div>
   );

@@ -20,9 +20,10 @@ export function isSameDate(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-// "08:00–17:00", or "22:00–08:00 (+1)" for a shift ending the next day.
+// "08:00–17:00", "22:00–08:00 (+1)" for a shift ending the next day, or
+// "08:00–08:00 (24h)".
 export function formatShiftTime(start, end) {
   const s = start.slice(0, 5);
   const e = end.slice(0, 5);
-  return `${s}–${e}${e < s ? ' (+1)' : ''}`;
+  return `${s}–${e}${e === s ? ' (24h)' : e < s ? ' (+1)' : ''}`;
 }

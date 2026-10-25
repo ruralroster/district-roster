@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { supabase } from './supabase';
-import { readV3, planImport, SITES_LEFT_OUT } from './v3Import';
+import { readV3, readV3Shifts, planImport, SITES_LEFT_OUT } from './v3Import';
+import { formatShiftTime, toLocalDateStr } from './dateUtils';
 
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
-// Super admins only: the v3 Google Sheet's people into a district, with a
-// preview to check first. Nobody is invited or emailed.
+// Super admins only: the v3 Google Sheet's people, shift types and
+// vacancies into a district, with a preview to check first. Nobody is
+// invited or emailed.
 export default function ImportV3({ districts, onImported }) {
   const [districtId, setDistrictId] = useState(districts[0]?.district_id ?? '');
   const [read, setRead] = useState(null);
+  const [shifts, setShifts] = useState(null);
   const [chosenSites, setChosenSites] = useState([]);
   // Per person (by key): { left: true } to leave out, email, homeSite.
   const [edits, setEdits] = useState({});
@@ -21,19 +24,24 @@ export default function ImportV3({ districts, onImported }) {
     setError('');
     setResult(null);
     setRead(null);
+    setShifts(null);
     setEdits({});
     if (!file) return;
     try {
       const XLSX = await import('xlsx');
       const workbook = XLSX.read(await file.arrayBuffer());
-      // Only these two tabs are read; the rest (passwords, sessions) never are.
+      // Only these tabs are read; the rest (passwords, sessions) never are.
+      const wanted = /^(users|rostering officers|shift types|master vacancies)$|^vacancies - /i;
       const sheets = {};
-      for (const name of ['Users', 'Rostering Officers']) {
-        if (workbook.Sheets[name]) sheets[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: '' });
+      for (const name of workbook.SheetNames.filter((n) => wanted.test(n))) {
+        sheets[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: '' });
       }
       const found = readV3(sheets);
-      setRead(found);
-      setChosenSites(found.sites.filter((s) => !SITES_LEFT_OUT.includes(s)));
+      const foundShifts = readV3Shifts(sheets);
+      const sites = [...new Set([...found.sites, ...foundShifts.shiftTypes.map((t) => t.site)])].sort();
+      setRead({ ...found, sites });
+      setShifts(foundShifts);
+      setChosenSites(sites.filter((s) => !SITES_LEFT_OUT.includes(s)));
     } catch (err) {
       setError(err.message);
     }
@@ -83,7 +91,6 @@ export default function ImportV3({ districts, onImported }) {
       return;
     }
     setResult(counts);
-    setRead(null);
     onImported();
   }
 
@@ -176,8 +183,102 @@ export default function ImportV3({ districts, onImported }) {
           <button onClick={runImport} disabled={busy || blocked || !going.length}>
             {busy ? 'Importing…' : `Import ${chosenSites.length} sites, ${doctorCount} doctors, ${officerCount} officers`}
           </button>
+
+          {shifts && <ShiftsImport districtId={districtId} shifts={shifts} chosenSites={chosenSites} onImported={onImported} />}
         </>
       )}
+    </div>
+  );
+}
+
+// The chosen sites' shift types, and their vacancies from today on, posted
+// as open shifts. Separate from the people so either can be redone.
+function ShiftsImport({ districtId, shifts, chosenSites, onImported }) {
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const today = toLocalDateStr(new Date());
+  const chosen = new Set(chosenSites);
+  const types = shifts.shiftTypes.filter((t) => chosen.has(t.site));
+  const atSites = shifts.vacancies.filter((v) => chosen.has(v.site));
+  const vacancies = atSites.filter((v) => v.date >= today);
+  const pastCount = atSites.length - vacancies.length;
+  const postable = vacancies.filter((v) => v.shiftType);
+  const typeSites = chosenSites.filter((site) => types.some((t) => t.site === site));
+  const skillText = (skill) => (skill === 'Emergency' ? 'Any doctor' : `Needs ${skill}`);
+
+  async function runImport() {
+    setBusy(true);
+    setError('');
+    const data = {
+      sites: typeSites,
+      shift_types: types.map((t) => ({
+        site: t.site, name: t.name, start_time: t.start, end_time: t.end, required_skill: t.skill, notes: t.notes,
+      })),
+      vacancies: postable.map((v) => ({ site: v.site, date: v.date, name: v.name })),
+    };
+    const { data: counts, error } = await supabase.rpc('import_v3_shifts', { p_district_id: districtId, p_data: data });
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setResult(counts);
+    onImported();
+  }
+
+  return (
+    <div className="stack">
+      <strong>Shift types ({types.length})</strong>
+      {typeSites.map((site) => (
+        <div key={site} className="small">
+          <div><strong>{site}</strong></div>
+          <ul className="rows">
+            {types.filter((t) => t.site === site).map((t) => (
+              <li key={t.name} className="row">
+                <span>{t.name}</span>
+                <span className="muted">
+                  {formatShiftTime(t.start, t.end)} · {skillText(t.skill)}
+                  {t.skillGuessed && <span className="badge guess">from the name</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      <p className="small muted">
+        <span className="badge guess">from the name</span> v3 had no required skill for these, so it's worked out from the
+        shift's name. Officers can change shift types on the Sites tab.
+      </p>
+
+      <strong>Vacancies from today ({vacancies.length})</strong>
+      <ul className="rows small">
+        {vacancies.map((v) => (
+          <li key={`${v.site}|${v.date}|${v.name}`} className="row">
+            <span>{new Date(`${v.date}T00:00`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            <span>{v.site}: {v.name}</span>
+            {v.shiftType ? (
+              <span className="muted">{formatShiftTime(v.shiftType.start, v.shiftType.end)}</span>
+            ) : (
+              <span className="error">No {v.site} shift type with this name, so not imported</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {pastCount > 0 && <p className="small muted">{pastCount} vacancies before today aren't imported.</p>}
+
+      {error && <p className="error">{error}</p>}
+      {result && (
+        <p className="ok">
+          Imported: {result.shift_types_saved} shift types, {result.vacancies_posted} open shifts posted
+          {result.vacancies_already_posted > 0 && ` (${result.vacancies_already_posted} were already posted)`}.
+          {result.vacancies_without_shift_type.length > 0 && ` Not posted: ${result.vacancies_without_shift_type.join('; ')}.`}
+        </p>
+      )}
+      <button onClick={runImport} disabled={busy || !types.length}>
+        {busy ? 'Importing…' : `Import ${types.length} shift types and ${postable.length} vacancies`}
+      </button>
     </div>
   );
 }

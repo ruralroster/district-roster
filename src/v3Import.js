@@ -41,7 +41,7 @@ export function readSkills(ast) {
   for (const word of splitList(ast)) {
     if (/^emerg/i.test(word)) found.add('Emergency');
     else if (/^ana?esth/i.test(word)) found.add('Anaesthetics');
-    else if (/^(o\s*&\s*g|obs|obstet)/i.test(word)) found.add('O&G');
+    else if (/^(o\s*&\s*g|obs|obt)/i.test(word)) found.add('O&G'); // obt: v3's "Obtetrics"
   }
   return SKILLS.filter((s) => found.has(s));
 }
@@ -156,4 +156,87 @@ export function planImport({ people }, chosenSites) {
     (doctor || officerSites.length ? included : skipped).push({ ...p, doctor, officerSites });
   }
   return { included, skipped };
+}
+
+// ============================================================
+// SHIFT TYPES AND VACANCIES
+// ============================================================
+
+// A time cell: a fraction of a day (0.3333 = 08:00, 1 = midnight) or
+// "12:20" text. "" if neither.
+export function readTime(value) {
+  if (typeof value === 'number') {
+    const minutes = Math.round(value * 24 * 60) % (24 * 60);
+    return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+  }
+  const m = clean(value).match(/^(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+}
+
+// A date cell: an Excel day number or "27/06/2026" (v3 writes dd/mm/yyyy).
+// "2026-06-27", or "" if neither.
+export function readDate(value) {
+  if (typeof value === 'number') {
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(value) * 86400000);
+    return d.toISOString().slice(0, 10);
+  }
+  const m = clean(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
+}
+
+// v3's "Required AST" column, or, when it's blank, the shift's name
+// ("Anaesthetics Day" needs Anaesthetics). guessed says which.
+function shiftSkill(requiredAst, name) {
+  const fromAst = readSkills(requiredAst).find((s) => s !== 'Emergency');
+  if (fromAst) return { skill: fromAst, guessed: false };
+  if (clean(requiredAst)) return { skill: 'Emergency', guessed: false };
+  const fromName = readSkills(name.replace(/\s+/g, ',').replace(/[()]/g, '')).find((s) => s !== 'Emergency');
+  return { skill: fromName || 'Emergency', guessed: !!fromName };
+}
+
+// sheets: the "Shift Types" tab and every "Vacancies - <site>" and "Master
+// Vacancies" tab, read with raw values (numbers stay numbers).
+// Returns { shiftTypes, vacancies } for every site; vacancies are one per
+// site, date and name, each with the matching shift type if there is one.
+export function readV3Shifts(sheets) {
+  const types = sheets['Shift Types'];
+  if (!types) throw new Error('No "Shift Types" tab. Is this the v3 roster sheet?');
+  const header = types[0].map(clean);
+  const [cName, cSite, cStart, cEnd, cAst, cNotes] = ['Job Type', 'Location', 'Start Time', 'End Time', 'Required AST', 'Notes'].map(
+    (n) => header.indexOf(n),
+  );
+
+  const shiftTypes = [];
+  const typeKey = (site, name) => `${site.toLowerCase()}|${name.toLowerCase()}`;
+  const byKey = new Map();
+  for (const row of types.slice(1)) {
+    const name = clean(row[cName]);
+    const site = clean(row[cSite]);
+    const start = readTime(row[cStart]);
+    const end = readTime(row[cEnd]);
+    if (!name || !site || !start || !end || byKey.has(typeKey(site, name))) continue;
+    const { skill, guessed } = shiftSkill(row[cAst], name);
+    const type = { site, name, start, end, skill, skillGuessed: guessed, notes: clean(row[cNotes]) };
+    byKey.set(typeKey(site, name), type);
+    shiftTypes.push(type);
+  }
+
+  const seen = new Set();
+  const vacancies = [];
+  for (const [tab, rows] of Object.entries(sheets)) {
+    if (!/^vacancies - |^master vacancies$/i.test(tab)) continue;
+    const h = rows[0].map(clean);
+    const [cDate, cJob, cLoc] = ['Date', 'Job Type', 'Location'].map((n) => h.indexOf(n));
+    for (const row of rows.slice(1)) {
+      const date = readDate(row[cDate]);
+      const name = clean(row[cJob]);
+      const site = clean(row[cLoc]);
+      const key = `${site.toLowerCase()}|${date}|${name.toLowerCase()}`;
+      if (!date || !name || !site || seen.has(key)) continue;
+      seen.add(key);
+      vacancies.push({ site, date, name, shiftType: byKey.get(typeKey(site, name)) ?? null });
+    }
+  }
+  vacancies.sort((a, b) => a.date.localeCompare(b.date) || a.site.localeCompare(b.site));
+  return { shiftTypes, vacancies };
 }

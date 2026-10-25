@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase, SKILLS } from './supabase';
 import { getMondayOfWeek, toLocalDateStr, isSameDate, formatShiftTime } from './dateUtils';
+import BulkShifts from './BulkShifts';
 
 // Same look as roster-app's officer Calendar tab: 4 weeks of square day
 // tiles, coloured by status, with a legend.
@@ -30,6 +31,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [notices, setNotices] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [shiftTypes, setShiftTypes] = useState([]);
   const [error, setError] = useState('');
 
   const days = [];
@@ -70,7 +72,14 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
       .eq('active', true)
       .order('name')
       .then(({ data }) => setDoctors(data ?? []));
-  }, [districtId, isOfficer]);
+    supabase
+      .from('site_shift_types')
+      .select('*')
+      .in('site_id', [...officerSiteIds])
+      .order('start_time')
+      .order('name')
+      .then(({ data }) => setShiftTypes(data ?? []));
+  }, [districtId, isOfficer, officerSiteIds]);
 
   // The notices this view is about: officers see their own sites'; doctors
   // see open ones their skills fit, plus anything they're booked on.
@@ -185,9 +194,14 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
       {view === 'officer' && (
         <PostShift
           sites={sites.filter((s) => officerSiteIds.has(s.site_id))}
+          shiftTypes={shiftTypes}
           defaultDate={selectedDate ? toLocalDateStr(selectedDate) : ''}
           onPosted={load}
         />
+      )}
+
+      {view === 'officer' && (
+        <BulkShifts sites={sites.filter((s) => officerSiteIds.has(s.site_id))} shiftTypes={shiftTypes} onPosted={load} />
       )}
     </div>
   );
@@ -213,7 +227,7 @@ function DayPanel({ date, notices, view, sites, doctors, me, onChanged }) {
         {notices.map((n) => (
           <li key={n.notice_id} className="row">
             <div>
-              <strong>{siteName(n.site_id)}</strong> {formatShiftTime(n.start_time, n.end_time)}
+              <strong>{siteName(n.site_id)}</strong> {n.title && `${n.title} `}{formatShiftTime(n.start_time, n.end_time)}
               <span className={n.status === 'open' ? 'badge open' : 'badge'}>
                 {n.status === 'open' ? 'Open' : `Filled: ${doctorName(n.filled_by_doctor_id)}`}
               </span>
@@ -256,8 +270,8 @@ function DayPanel({ date, notices, view, sites, doctors, me, onChanged }) {
   );
 }
 
-function PostShift({ sites, defaultDate, onPosted }) {
-  const blank = { site_id: '', shift_date: '', start_time: '08:00', end_time: '17:00', required_skill: 'Emergency', notes: '' };
+function PostShift({ sites, shiftTypes, defaultDate, onPosted }) {
+  const blank = { site_id: '', shift_date: '', title: '', start_time: '08:00', end_time: '17:00', required_skill: 'Emergency', notes: '' };
   const [form, setForm] = useState(blank);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -265,6 +279,16 @@ function PostShift({ sites, defaultDate, onPosted }) {
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const siteId = form.site_id || (sites.length === 1 ? sites[0].site_id : '');
   const shiftDate = form.shift_date || defaultDate;
+  const siteTypes = shiftTypes.filter((t) => t.site_id === siteId);
+  // Picking a shift type fills in its times and skill.
+  function pickType(e) {
+    const type = siteTypes.find((t) => t.shift_type_id === e.target.value);
+    setForm((f) =>
+      type
+        ? { ...f, title: type.name, start_time: type.start_time.slice(0, 5), end_time: type.end_time.slice(0, 5), required_skill: type.required_skill }
+        : { ...f, title: '' },
+    );
+  }
 
   async function post(e) {
     e.preventDefault();
@@ -275,6 +299,7 @@ function PostShift({ sites, defaultDate, onPosted }) {
       ...form,
       site_id: siteId,
       shift_date: shiftDate,
+      title: form.title || null,
       notes: form.notes.trim() || null,
     });
     setBusy(false);
@@ -304,6 +329,17 @@ function PostShift({ sites, defaultDate, onPosted }) {
           Date
           <input type="date" value={shiftDate} onChange={set('shift_date')} required />
         </label>
+        {siteTypes.length > 0 && (
+          <label>
+            Shift
+            <select value={siteTypes.find((t) => t.name === form.title)?.shift_type_id ?? ''} onChange={pickType}>
+              <option value="">Other times…</option>
+              {siteTypes.map((t) => (
+                <option key={t.shift_type_id} value={t.shift_type_id}>{t.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           Start
           <input type="time" value={form.start_time} onChange={set('start_time')} required />
@@ -325,7 +361,7 @@ function PostShift({ sites, defaultDate, onPosted }) {
           <input value={form.notes} onChange={set('notes')} placeholder="Optional" />
         </label>
       </div>
-      <p className="muted small">A finish earlier than the start means it ends the next day.</p>
+      <p className="muted small">A finish earlier than the start means it ends the next day; the same as the start, 24 hours.</p>
       {error && <p className="error">{error}</p>}
       {message && <p className="ok">{message}</p>}
       <button type="submit" disabled={busy}>Post shift</button>
