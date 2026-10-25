@@ -8,10 +8,14 @@ import Sites from './Sites';
 import Admin from './Admin';
 import Notifications from './Notifications';
 import Calendar from './Calendar';
+import { needsTwoFactor, TwoFactorChallenge, TwoFactorSettings } from './TwoFactor';
 
 export default function App() {
   const [session, setSession] = useState(undefined);
   const [needsPassword, setNeedsPassword] = useState(arrivedToSetPassword);
+  // null while checking; true until the 2FA code is entered.
+  const [needsCode, setNeedsCode] = useState(null);
+  const userId = session?.user?.id;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -22,9 +26,16 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    setNeedsCode(null);
+    if (userId) needsTwoFactor().then(setNeedsCode);
+  }, [userId]);
+
   if (session === undefined) return <p className="page">Loading…</p>;
   if (!session) return <SignIn />;
   if (needsPassword) return <SetPassword onDone={() => setNeedsPassword(false)} />;
+  if (needsCode === null) return <p className="page">Loading…</p>;
+  if (needsCode) return <TwoFactorChallenge onVerified={() => setNeedsCode(false)} />;
   return <Home user={session.user} />;
 }
 
@@ -82,9 +93,9 @@ function Home({ user }) {
 
   const tabs = [
     (me || officerSiteIds.size > 0) && ['calendar', 'Calendar'],
-    (me || officerSiteIds.size > 0) && ['profile', me ? 'My profile' : 'Notifications'],
+    (me || officerSiteIds.size > 0 || isSuperAdmin) && ['profile', me ? 'My profile' : 'My account'],
     isOfficer && ['doctors', 'Doctors'],
-    districtId && ['sites', 'Sites'],
+    officerSiteIds.size > 0 && ['sites', 'Sites'],
     isSuperAdmin && ['admin', 'Admin'],
   ].filter(Boolean);
   const activeTab = tabs.some(([k]) => k === tab) ? tab : tabs[0]?.[0];
@@ -138,6 +149,7 @@ function Home({ user }) {
               officerSiteIds.size > 0 && "As an officer, you're emailed and sent a phone notification when someone applies for or withdraws from your sites' shifts.",
             ].filter(Boolean).join(' ')}
           />
+          <TwoFactorSettings />
         </div>
       )}
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}

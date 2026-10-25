@@ -115,14 +115,14 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
     me && applications.filter((a) => a.notice_id === noticeId && a.doctor_id === me.doctor_id).at(-1);
 
   // The notices this view is about: officers see their own sites'; doctors
-  // see open ones their skills fit at sites they'd work at, plus anything
-  // they've applied for or are booked on. canDo: open and nothing in the
-  // way (rest rules, unavailable day).
+  // see only open ones they can do (skills, a site they'd work at, rested,
+  // not marked unavailable), plus anything they've applied for or are
+  // booked on.
   const canDo = (n) => n.status === 'open' && availability.has(n.notice_id) && !availability.get(n.notice_id).problem;
   const relevant = notices.filter((n) =>
     view === 'officer'
       ? officerSiteIds.has(n.site_id)
-      : (n.status === 'open' && !!availability.get(n.notice_id)?.interested) ||
+      : (canDo(n) && !!availability.get(n.notice_id)?.interested) ||
         (me && n.filled_by_doctor_id === me.doctor_id) ||
         !!myApplication(n.notice_id),
   );
