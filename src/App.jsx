@@ -153,7 +153,7 @@ function Home({ user }) {
         </div>
       )}
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}
-      {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} officerSiteIds={officerSiteIds} />}
+      {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} officerSiteIds={officerSiteIds} onChanged={reload} />}
       {activeTab === 'admin' && <Admin districts={districts} onChanged={reload} />}
     </div>
   );

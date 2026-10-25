@@ -4,7 +4,7 @@ import { formatShiftTime } from './dateUtils';
 
 const skillText = (skill) => (skill === 'Emergency' ? 'Any doctor' : `Needs ${skill}`);
 
-export default function Sites({ districtId, sites, officerSiteIds }) {
+export default function Sites({ districtId, sites, officerSiteIds, onChanged }) {
   const [officers, setOfficers] = useState([]);
   const [shiftTypes, setShiftTypes] = useState([]);
   const [error, setError] = useState('');
@@ -83,6 +83,7 @@ export default function Sites({ districtId, sites, officerSiteIds }) {
                 </ul>
               )}
               {canEdit && <AddShiftType siteId={s.site_id} run={run} />}
+              <Escalation site={s} canEdit={canEdit} onChanged={onChanged} />
             </li>
           );
         })}
@@ -112,6 +113,41 @@ function AddShiftType({ siteId, run }) {
         ))}
       </select>
       <button type="submit" className="secondary">Add shift type</button>
+    </form>
+  );
+}
+
+// How long the site's gaps stay local (offered on roster-app) before
+// going to the district.
+function Escalation({ site, canEdit, onChanged }) {
+  const saved = site.escalate_after_hours ?? 72;
+  const [hours, setHours] = useState(String(saved));
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  async function save(e) {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    const { error } = await supabase.rpc('set_site_escalation', { p_site_id: site.site_id, p_hours: Number(hours) });
+    if (error) return setError(error.message);
+    setMessage('Saved.');
+    onChanged();
+  }
+
+  const explain = `Gaps offered on roster-app go to the district after ${saved} hours unfilled, or straight away if the shift starts within ${saved} hours.`;
+  if (!canEdit) return <p className="small muted">{explain}</p>;
+  return (
+    <form className="inline small" onSubmit={save}>
+      <label className="inline">
+        Keep gaps local for
+        <input type="number" min="0" max="720" step="1" value={hours} onChange={(e) => setHours(e.target.value)} className="hours-input" />
+        hours before sending them to the district
+      </label>
+      {String(saved) !== hours && <button type="submit" className="secondary">Save</button>}
+      {message && <span className="ok">{message}</span>}
+      {error && <span className="error">{error}</span>}
+      <span className="muted">{explain}</span>
     </form>
   );
 }
