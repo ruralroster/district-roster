@@ -85,16 +85,11 @@ export default function Admin({ districts, onChanged }) {
 
 function SiteRow({ site, officers, pending, departments, run }) {
   const [email, setEmail] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   async function addOfficer(e) {
     e.preventDefault();
     if (await run(supabase.rpc('add_site_officer', { p_site_id: site.site_id, p_email: email }))) setEmail('');
-  }
-
-  function remove() {
-    if (window.confirm(`Delete ${site.name} from DR Roster? Its district shifts, applications, swaps, shift types and officers here go too, and doctors with it as their home site will have no home site. Roster-app isn't touched. To only disconnect it from roster-app, choose "Not on roster-app" instead.`)) {
-      run(supabase.from('sites').delete().eq('site_id', site.site_id));
-    }
   }
 
   return (
@@ -110,7 +105,7 @@ function SiteRow({ site, officers, pending, departments, run }) {
             <option key={dep.department_id} value={dep.department_id}>roster-app: {dep.name}</option>
           ))}
         </select>
-        <button className="link danger" onClick={remove}>Delete site</button>
+        <button className="link danger" onClick={() => setDeleting(true)}>Delete site</button>
       </div>
       <div className="small">
         {officers.length === 0 && pending.length === 0 && <span className="muted">No extra officers</span>}
@@ -143,7 +138,71 @@ function SiteRow({ site, officers, pending, departments, run }) {
         <input type="email" placeholder="Officer's email (must already have a login)" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <button type="submit" className="secondary">Add officer</button>
       </form>
+      {deleting && <DeleteSite site={site} run={run} onClose={() => setDeleting(false)} />}
     </li>
+  );
+}
+
+// Deleting a site: what will go, with counts, and the site's name typed
+// in before it can be deleted, so a stray tap can't do it.
+function DeleteSite({ site, run, onClose }) {
+  const [counts, setCounts] = useState(null);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const count = (query) => query.then((r) => r.count ?? 0);
+    const notices = () => supabase.from('district_notices').select('notice_id', { count: 'exact', head: true }).eq('site_id', site.site_id);
+    Promise.all([
+      count(notices()),
+      count(notices().eq('status', 'open')),
+      count(notices().eq('status', 'filled')),
+      count(supabase.from('district_doctors').select('doctor_id', { count: 'exact', head: true }).eq('home_site_id', site.site_id)),
+    ]).then(([all, open, filled, home]) => setCounts({ all, open, filled, home }));
+  }, [site.site_id]);
+
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const matches = typed.trim().toLowerCase() === site.name.trim().toLowerCase();
+  async function remove() {
+    setBusy(true);
+    const ok = await run(supabase.from('sites').delete().eq('site_id', site.site_id));
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div className="dialog card stack" role="dialog" aria-modal="true" aria-labelledby="delete-site-title" onClick={(e) => e.stopPropagation()}>
+        <h2 id="delete-site-title">Delete {site.name}?</h2>
+        <p>This can't be undone. From DR Roster, it deletes:</p>
+        <ul>
+          <li>
+            {counts ? `${counts.all} district shift${counts.all === 1 ? '' : 's'}` : 'All its district shifts'}
+            {counts && counts.all > 0 && ` (${counts.open} open, ${counts.filled} filled)`}, with their applications and history
+          </li>
+          <li>swap listings and offers involving its shifts</li>
+          <li>its shift types and its officer list</li>
+          {counts?.home > 0 && <li>{counts.home} doctor{counts.home === 1 ? '' : 's'} with it as their home site will have no home site</li>}
+        </ul>
+        <p>
+          <strong>Roster-app isn't touched</strong>: the department, staff, roster and cards all stay.
+          {site.department_id && ' To only disconnect it from roster-app, cancel and choose "Not on roster-app" instead.'}
+        </p>
+        <label>
+          Type {site.name} to confirm
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus />
+        </label>
+        <div className="inline">
+          <button className="danger-fill" disabled={!matches || busy} onClick={remove}>Delete {site.name}</button>
+          <button className="secondary" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
