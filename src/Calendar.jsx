@@ -17,7 +17,7 @@ const STATUS_STYLES = {
   },
   doctor: {
     none: { label: 'Nothing for you' },
-    available: { label: 'Shifts you can apply for' },
+    available: { label: "Shifts you can apply for, in the site's colour" },
     applied: { label: "You've applied" },
     booked: { label: "You're booked" },
     working: { label: 'Working (roster-app)' },
@@ -168,6 +168,15 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
         .map((n) => n.site_id),
     ),
   ];
+  // A day with shifts a doctor can apply for takes the site's colour, or
+  // stripes of each site's colour when there are several.
+  const availableStyle = (dateStr) => {
+    const ids = [...new Set(relevant.filter((n) => n.shift_date === dateStr && canDo(n)).map((n) => n.site_id))];
+    const colour = (id) => `hsl(${hues.get(id) ?? 210} 60% 50%)`;
+    if (ids.length === 1) return { background: colour(ids[0]), borderColor: colour(ids[0]) };
+    const stripes = ids.map((id, i) => `${colour(id)} ${i * 8}px ${(i + 1) * 8}px`).join(', ');
+    return { background: `repeating-linear-gradient(135deg, ${stripes})`, borderColor: 'transparent' };
+  };
   const keySites = sites.filter((s) => relevant.some((n) => n.site_id === s.site_id));
 
   const today = new Date();
@@ -220,6 +229,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
                 <button
                   key={dateStr}
                   className={classes.join(' ')}
+                  style={status === 'available' ? availableStyle(dateStr) : undefined}
                   title={[styles[status].label, count > 0 ? `${count} open` : null].filter(Boolean).join(' — ')}
                   onClick={() => setSelectedDate(date)}
                 >
@@ -229,7 +239,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
                   {date.getDate()}
                   {count > 0 && <span className="cal-count">{count}</span>}
                   <span className="cal-dots">
-                    {daySites(dateStr).slice(0, 6).map((id) => (
+                    {status !== 'available' && daySites(dateStr).slice(0, 6).map((id) => (
                       <span key={id} className="site-dot" style={siteStyle(hues, id)} />
                     ))}
                   </span>

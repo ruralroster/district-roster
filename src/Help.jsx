@@ -75,10 +75,10 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           </Section>
           <Section title="Calendar colours">
             <ul>
-              <li><span className="help-swatch cal-available" /> <strong>Blue</strong>: shifts you can apply for (the number is how many).</li>
+              <li><span className="help-swatch cal-available" /> <strong>The site's colour</strong>: shifts you can apply for (the number is how many). Shifts at more than one site that day make it striped in each site's colour.</li>
               <li><span className="help-swatch cal-applied" /> <strong>Amber</strong>: you've applied.</li>
               <li><span className="help-swatch cal-booked" /> <strong>Green</strong>: you're booked.</li>
-              <li><span className="help-swatch cal-working" /> <strong>Slate</strong>: you're working: rostered on roster-app, or marked working elsewhere there. A short roster-app shift can still leave room for a district one, which then shows blue instead.</li>
+              <li><span className="help-swatch cal-working" /> <strong>Pale grey</strong>: you're working: rostered on roster-app, or marked working elsewhere there. A short roster-app shift can still leave room for a district one, which then shows in the site's colour instead.</li>
               <li><span className="help-swatch cal-off" /> <strong>Grey, struck through</strong>: you've marked the day not available here.</li>
               <li><span className="help-swatch cal-none" /> <strong>White</strong>: nothing for you.</li>
             </ul>

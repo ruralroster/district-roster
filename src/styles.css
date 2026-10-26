@@ -119,14 +119,16 @@ button.danger { color: var(--danger); }
 .cal-filled:hover, .cal-booked:hover { background: #16a34a; }
 .cal-open { background: #ef4444; border-color: #dc2626; color: #fff; }
 .cal-open:hover { background: #dc2626; }
-.cal-available { background: #0ea5e9; border-color: #0284c7; color: #fff; }
-.cal-available:hover { background: #0284c7; }
+.cal-available { background: #0ea5e9; border-color: #0284c7; color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / 0.5); }
+.cal-available:hover { filter: brightness(0.9); }
+/* The legend's example: a day with shifts at two sites. */
+.cal-swatch.cal-available, .help-swatch.cal-available { background: repeating-linear-gradient(135deg, hsl(200 60% 50%) 0 4px, hsl(30 60% 50%) 4px 8px); border-color: transparent; }
 .cal-applied { background: #f59e0b; border-color: #d97706; color: #fff; }
 .cal-applied:hover { background: #d97706; }
 .cal-off { background: #e5e7eb; border-color: #9ca3af; color: #6b7280; text-decoration: line-through; }
 .cal-off:hover { background: #d1d5db; }
-.cal-working { background: #64748b; border-color: #475569; color: #fff; }
-.cal-working:hover { background: #475569; }
+.cal-working { background: #f1f3f5; border-color: #d1d5db; color: #374151; }
+.cal-working:hover { background: #e5e7eb; }
 
 .cal-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .cal-legend div { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #4b5563; }
