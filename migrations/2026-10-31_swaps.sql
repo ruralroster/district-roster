@@ -277,7 +277,7 @@ $$;
 -- district), the person's own hours (their shift), level and skill (a
 -- consultant needs the card's consultant skill), and a title.
 CREATE OR REPLACE FUNCTION district_assignment_facts(p_assignment_id uuid, p_district_id uuid)
-RETURNS TABLE (site_id uuid, date date, start_time time, end_time time, position text, skill text, title text,
+RETURNS TABLE (site_id uuid, date date, start_time time, end_time time, shift_position text, skill text, title text,
                staff_id uuid, shift_id uuid, location_id uuid, department_id uuid, user_id uuid)
 LANGUAGE sql
 STABLE
@@ -372,7 +372,7 @@ BEGIN
 
   INSERT INTO district_notices (site_id, shift_date, start_time, end_time, required_skill, position, title, notes,
                                 source, status, filled_by_doctor_id, notified_at)
-  VALUES (v_f.site_id, v_f.date, v_f.start_time, v_f.end_time, v_f.skill, v_f.position, v_f.title, 'roster-app shift',
+  VALUES (v_f.site_id, v_f.date, v_f.start_time, v_f.end_time, v_f.skill, v_f.shift_position, v_f.title, 'roster-app shift',
           'roster_shift', 'filled', p_doctor_id, now())
   RETURNING notice_id INTO v_id;
   INSERT INTO district_roster_shifts (notice_id, assignment_id, department_id, staff_id, date, shift_id, location_id)
@@ -925,7 +925,7 @@ AS $$
                WHERE rs.notice_id = n.notice_id AND rs.staff_id = r.staff_id AND rs.date = r.date AND rs.shift_id IS NOT DISTINCT FROM r.shift_id)
              AND district_swap_problem_at(me.doctor_id, n.shift_date, n.start_time, n.end_time, n.position, n.required_skill,
                                           n.notice_id, NULL, r.assignment_id) IS NULL
-             AND district_swap_problem_at(l.doctor_id, r.date, r.start_time, r.end_time, r.position, r.skill,
+             AND district_swap_problem_at(l.doctor_id, r.date, r.start_time, r.end_time, r.shift_position, r.skill,
                                           NULL, n.notice_id, NULL) IS NULL
          ), '[]'::jsonb)
   FROM district_swap_listings l
