@@ -22,6 +22,24 @@ function fortnightDays(dateStr) {
   });
 }
 
+// My shifts covers this many weeks of roster-app shifts (DR Roster ones: all).
+const WEEKS_AHEAD = 12;
+const addDays = (dateStr, n) => {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return toLocalDateStr(d);
+};
+
+// My shifts as a list or a calendar, remembered on this device.
+const VIEW_KEY = 'dr-my-shifts-view';
+function savedView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'calendar' ? 'calendar' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
 const dayLabel = (dateStr) =>
   new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
 // "2026-11-03:night" -> "Tue 3 Nov night"
@@ -32,6 +50,7 @@ const slotLabel = (slot) => {
 
 export default function Swaps({ districtId, sites, me, officerSiteIds }) {
   const [mine, setMine] = useState([]); // shifts I'm booked on, from today
+  const [rosterShifts, setRosterShifts] = useState([]); // my roster-app shifts at the district's sites
   const [listings, setListings] = useState([]);
   const [offers, setOffers] = useState([]);
   const [market, setMarket] = useState([]);
@@ -45,7 +64,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
   const hues = siteHues(sites);
 
   const load = useCallback(async () => {
-    const [mineRes, listingsRes, offersRes, marketRes, doctorsRes] = await Promise.all([
+    const [mineRes, listingsRes, offersRes, marketRes, doctorsRes, rosterRes] = await Promise.all([
       me
         ? supabase.from('district_notices').select('*').eq('filled_by_doctor_id', me.doctor_id).eq('status', 'filled')
           .gte('shift_date', today).order('shift_date').order('start_time')
@@ -54,12 +73,14 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
       supabase.from('district_swap_offers').select('*').order('created_at', { ascending: false }).limit(300),
       me ? supabase.rpc('my_swap_market', { p_district_id: districtId }) : { data: [] },
       supabase.from('district_doctors').select('doctor_id, name').eq('district_id', districtId),
+      me ? supabase.rpc('my_roster_swap_shifts', { p_from: today, p_to: addDays(today, WEEKS_AHEAD * 7) }) : { data: [] },
     ]);
-    const firstError = [mineRes, listingsRes, offersRes, marketRes].find((r) => r.error)?.error;
+    const firstError = [mineRes, listingsRes, offersRes, marketRes, rosterRes].find((r) => r.error)?.error;
     if (firstError) setError(firstError.message);
     const ls = listingsRes.data ?? [];
     const os = offersRes.data ?? [];
     setMine(mineRes.data ?? []);
+    setRosterShifts(rosterRes.data ?? []);
     setListings(ls);
     setOffers(os);
     setMarket(marketRes.data ?? []);
@@ -96,7 +117,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
   const ShiftText = ({ notice }) =>
     notice ? (
       <span>
-        <strong className="site-name">{siteName(notice.site_id)}</strong> {dayLabel(notice.shift_date)} · {notice.title && `${notice.title} `}
+        <strong className="site-name">{siteName(notice.site_id) || notice.site_name}</strong> {dayLabel(notice.shift_date)} · {notice.title && `${notice.title} `}
         {formatShiftTime(notice.start_time, notice.end_time)}
       </span>
     ) : (
@@ -106,8 +127,29 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
   const openListing = (noticeId) => listings.find((l) => l.notice_id === noticeId && l.status === 'open');
   const myOffers = me ? offers.filter((o) => o.doctor_id === me.doctor_id) : [];
   const marketShown = market.filter((m) => !m.problem || m.swap_options?.length);
-  // Roster-app shifts appear only once listed (from roster-app).
-  const myShifts = mine.filter((n) => n.source !== 'roster_shift' || openListing(n.notice_id));
+  // Every shift I work: DR Roster bookings, and roster-app shifts at the
+  // district's sites (my primary site's roster included). A DR Roster
+  // booking that's also on a roster-app card shows once, as the DR one.
+  const siteIdByName = new Map(sites.map((s) => [s.name, s.site_id]));
+  const drShifts = mine.filter((n) => n.source !== 'roster_shift');
+  const sameShift = (a, b) =>
+    a.site_id === b.site_id && a.shift_date === b.shift_date && a.start_time === b.start_time && a.end_time === b.end_time;
+  const myShifts = [
+    ...drShifts.map((n) => ({ key: `n:${n.notice_id}`, noticeId: n.notice_id, shift: n, listing: openListing(n.notice_id) })),
+    ...rosterShifts
+      .map((r) => ({
+        key: `a:${r.assignment_id}`,
+        assignmentId: r.assignment_id,
+        shift: {
+          site_id: siteIdByName.get(r.site_name), site_name: r.site_name, shift_date: r.date,
+          title: r.label, start_time: r.start_time, end_time: r.end_time,
+        },
+        listing: r.listing_id
+          ? listings.find((l) => l.listing_id === r.listing_id) ?? { listing_id: r.listing_id, available_slots: [] }
+          : null,
+      }))
+      .filter((r) => !drShifts.some((n) => sameShift(n, r.shift))),
+  ].sort((a, b) => a.shift.shift_date.localeCompare(b.shift.shift_date) || a.shift.start_time.localeCompare(b.shift.start_time));
   const officerListings = listings.filter((l) => {
     const n = notices.get(l.notice_id);
     return l.status === 'open' && n && officerSiteIds.has(n.site_id);
@@ -225,70 +267,19 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
       )}
 
       {me && (
-        <div className="card">
-          <h2>My shifts</h2>
-          <p className="small muted">
-            Your booked DR Roster shifts. List one for swap if you can't do it; you still work it unless a swap is approved.
-            To list a roster-app shift, use Variation → Swap a shift in roster-app.
-          </p>
-          {myShifts.length === 0 && <p className="muted">You're not booked on any district shifts.</p>}
-          <ul className="rows">
-            {myShifts.map((n) => {
-              const l = openListing(n.notice_id);
-              const pending = l ? offers.filter((o) => o.listing_id === l.listing_id && o.status === 'pending') : [];
-              return (
-                <li key={n.notice_id} className="row column site-stripe" style={siteStyle(hues, n.site_id)}>
-                  <div>
-                    <ShiftText notice={n} />
-                    {n.source === 'roster_shift' && <span className="small muted"> (roster-app shift)</span>}
-                    {l && <span className="badge applied">Up for swap</span>}
-                    {l?.service_disruption && <span className="badge danger-badge">Service disruption</span>}
-                  </div>
-                  {l ? (
-                    <>
-                      {l.available_slots.length > 0 && (
-                        <div className="small muted">You can work in return: {l.available_slots.map(slotLabel).join(', ')}</div>
-                      )}
-                      <div className="small">
-                        {pending.length === 0
-                          ? 'No offers yet.'
-                          : pending.map((o) => (
-                            <div key={o.offer_id}>
-                              {name(o.doctor_id)}{' '}
-                              {o.offered_notice_id ? <>offers their <ShiftText notice={notices.get(o.offered_notice_id)} /></> : 'will take it'}
-                              {' '}(waiting for an officer)
-                            </div>
-                          ))}
-                      </div>
-                      <div>
-                        <button
-                          className="link"
-                          disabled={busy}
-                          onClick={() => window.confirm('Take this shift off the swap list?') && rpc('withdraw_swap_listing', { p_listing_id: l.listing_id }, 'Withdrawn.')}
-                        >
-                          Withdraw from swaps
-                        </button>
-                      </div>
-                    </>
-                  ) : listing === n.notice_id ? (
-                    <ListForm
-                      notice={n}
-                      busy={busy}
-                      onCancel={() => setListing(null)}
-                      onSubmit={async (args) => {
-                        if (await rpc('list_shift_for_swap', { p_notice_id: n.notice_id, ...args }, 'Listed. Doctors who could do it, and the site\'s officers, will be told.')) setListing(null);
-                      }}
-                    />
-                  ) : (
-                    <div>
-                      <button className="secondary" onClick={() => setListing(n.notice_id)}>List for swap</button>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <MyShifts
+          shifts={myShifts}
+          today={today}
+          offers={offers}
+          name={name}
+          notices={notices}
+          ShiftText={ShiftText}
+          hues={hues}
+          listing={listing}
+          setListing={setListing}
+          busy={busy}
+          rpc={rpc}
+        />
       )}
 
       {me && myOffers.length > 0 && (
@@ -324,6 +315,173 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
         </div>
       )}
     </div>
+  );
+}
+
+// My shifts: every shift I work, as a list or a calendar (tap a day for
+// its shifts). Each can be listed for swap or withdrawn.
+function MyShifts({ shifts, today, offers, name, notices, ShiftText, hues, listing, setListing, busy, rpc }) {
+  const [view, setView] = useState(savedView);
+  const [day, setDay] = useState(null);
+  const choose = (v) => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // Not remembered; fine.
+    }
+  };
+  const row = (item) => (
+    <MyShiftRow
+      key={item.key}
+      item={item}
+      offers={offers}
+      name={name}
+      notices={notices}
+      ShiftText={ShiftText}
+      style={siteStyle(hues, item.shift.site_id)}
+      listing={listing}
+      setListing={setListing}
+      busy={busy}
+      rpc={rpc}
+    />
+  );
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>My shifts</h2>
+        <div className="view-switch" role="group" aria-label="Show my shifts as">
+          {['list', 'calendar'].map((v) => (
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => choose(v)}>
+              {v === 'list' ? 'List' : 'Calendar'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="small muted">
+        Every shift you work: DR Roster shifts you've been approved for and, if you're on roster-app, your roster there. List
+        one for swap if you can't do it; you still work it unless a swap is approved.
+      </p>
+      {shifts.length === 0 && <p className="muted">No upcoming shifts.</p>}
+      {view === 'list' ? (
+        <ul className="rows">{shifts.map(row)}</ul>
+      ) : (
+        shifts.length > 0 && (
+          <>
+            <ShiftCalendar shifts={shifts} today={today} hues={hues} day={day} setDay={setDay} />
+            {day && (
+              <>
+                <h3 className="day-heading">{dayLabel(day)}</h3>
+                {shifts.some((i) => i.shift.shift_date === day) ? (
+                  <ul className="rows">{shifts.filter((i) => i.shift.shift_date === day).map(row)}</ul>
+                ) : (
+                  <p className="muted">No shifts this day.</p>
+                )}
+              </>
+            )}
+          </>
+        )
+      )}
+    </div>
+  );
+}
+
+// Weeks from this Monday to the last shift's, each day with a bar per
+// shift in its site's colour (striped amber when it's up for swap).
+function ShiftCalendar({ shifts, today, hues, day, setDay }) {
+  const monday = addDays(today, -((new Date(`${today}T00:00:00`).getDay() + 6) % 7));
+  const last = shifts[shifts.length - 1].shift.shift_date;
+  const weeks = Math.max(4, Math.floor((new Date(`${last}T00:00:00`) - new Date(`${monday}T00:00:00`)) / (7 * 86400000)) + 1);
+  const days = Array.from({ length: weeks * 7 }, (_, i) => addDays(monday, i));
+
+  return (
+    <div className="my-cal">
+      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <div key={d} className="my-cal-head">{d}</div>)}
+      {days.map((d) => {
+        const onDay = shifts.filter((i) => i.shift.shift_date === d);
+        const date = new Date(`${d}T00:00:00`);
+        const classes = ['my-cal-day', d < today && 'past', d === today && 'today', d === day && 'selected'].filter(Boolean).join(' ');
+        return (
+          <button
+            key={d}
+            type="button"
+            className={classes}
+            onClick={() => setDay(d === day ? null : d)}
+            aria-label={`${dayLabel(d)}: ${onDay.length} shift${onDay.length === 1 ? '' : 's'}`}
+          >
+            <span>
+              {date.getDate()}
+              {(date.getDate() === 1 || d === days[0]) && (
+                <span className="my-cal-month"> {date.toLocaleDateString('en-AU', { month: 'short' })}</span>
+              )}
+            </span>
+            {onDay.map((i) => (
+              <span key={i.key} className={`my-cal-bar${i.listing ? ' swap' : ''}`} style={siteStyle(hues, i.shift.site_id)} />
+            ))}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// One of my shifts: up for swap (offers so far, withdraw), or list it.
+function MyShiftRow({ item, offers, name, notices, ShiftText, style, listing, setListing, busy, rpc }) {
+  const l = item.listing;
+  const pending = l ? offers.filter((o) => o.listing_id === l.listing_id && o.status === 'pending') : [];
+  return (
+    <li className="row column site-stripe" style={style}>
+      <div>
+        <ShiftText notice={item.shift} />
+        {item.assignmentId && <span className="small muted"> (roster-app)</span>}
+        {l && <span className="badge applied">Up for swap</span>}
+        {l?.service_disruption && <span className="badge danger-badge">Service disruption</span>}
+      </div>
+      {l ? (
+        <>
+          {l.available_slots.length > 0 && (
+            <div className="small muted">You can work in return: {l.available_slots.map(slotLabel).join(', ')}</div>
+          )}
+          <div className="small">
+            {pending.length === 0
+              ? 'No offers yet.'
+              : pending.map((o) => (
+                <div key={o.offer_id}>
+                  {name(o.doctor_id)}{' '}
+                  {o.offered_notice_id ? <>offers their <ShiftText notice={notices.get(o.offered_notice_id)} /></> : 'will take it'}
+                  {' '}(waiting for an officer)
+                </div>
+              ))}
+          </div>
+          <div>
+            <button
+              className="link"
+              disabled={busy}
+              onClick={() => window.confirm('Take this shift off the swap list?') && rpc('withdraw_swap_listing', { p_listing_id: l.listing_id }, 'Withdrawn.')}
+            >
+              Withdraw from swaps
+            </button>
+          </div>
+        </>
+      ) : listing === item.key ? (
+        <ListForm
+          date={item.shift.shift_date}
+          busy={busy}
+          onCancel={() => setListing(null)}
+          onSubmit={async (args) => {
+            const ok = item.assignmentId
+              ? await rpc('list_roster_shift_for_swap', { p_assignment_id: item.assignmentId, ...args }, 'Listed. Doctors who could do it will be told.')
+              : await rpc('list_shift_for_swap', { p_notice_id: item.noticeId, ...args }, 'Listed. Doctors who could do it will be told.');
+            if (ok) setListing(null);
+          }}
+        />
+      ) : (
+        <div>
+          <button className="secondary" onClick={() => setListing(item.key)}>List for swap</button>
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -398,11 +556,11 @@ function MarketRow({ listing: l, notice: n, row, already, lister, notices, Shift
 
 // Listing a shift: service disruption, and the days/nights of its pay
 // fortnight you could work in return (none: they can only take it).
-function ListForm({ notice, busy, onCancel, onSubmit }) {
+function ListForm({ date, busy, onCancel, onSubmit }) {
   const [disruption, setDisruption] = useState(false);
   const [slots, setSlots] = useState([]);
   const [note, setNote] = useState('');
-  const days = fortnightDays(notice.shift_date);
+  const days = fortnightDays(date);
   const toggle = (slot) => setSlots((s) => (s.includes(slot) ? s.filter((x) => x !== slot) : [...s, slot]));
 
   return (
@@ -424,7 +582,7 @@ function ListForm({ notice, busy, onCancel, onSubmit }) {
           <span className="muted">Day</span>
           <span className="muted">Night</span>
           {days.map((d) => (
-            <SlotRow key={d} date={d} slots={slots} toggle={toggle} isShift={d === notice.shift_date} />
+            <SlotRow key={d} date={d} slots={slots} toggle={toggle} isShift={d === date} />
           ))}
         </div>
       </div>

@@ -199,3 +199,23 @@ button.danger { color: var(--danger); }
 .slot-grid { display: grid; grid-template-columns: auto 48px 48px; gap: 4px 8px; align-items: center; margin-top: 6px; max-width: 320px; }
 .slot-grid input { justify-self: center; width: 18px; height: 18px; }
 .slot-shift { font-weight: 700; }
+
+/* Swaps → My shifts: List / Calendar switch, and the calendar. */
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.card-head h2 { margin: 0; }
+.view-switch { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); }
+.view-switch button { padding: 4px 14px; border: none; border-radius: 999px; background: transparent; color: var(--muted); font-size: 0.875rem; }
+.view-switch button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+.my-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+.my-cal-head { text-align: center; font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.my-cal-day {
+  min-height: 52px; padding: 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px; font-size: 0.8rem; text-align: left;
+}
+.my-cal-day.past { opacity: 0.45; }
+.my-cal-day.today { border: 2px solid var(--accent); }
+.my-cal-day.selected { outline: 2px solid var(--text); outline-offset: 1px; }
+.my-cal-month { font-size: 0.65rem; text-transform: uppercase; color: var(--muted); }
+.my-cal-bar { height: 6px; border-radius: 3px; background: hsl(var(--site-hue, 210) 60% 50%); }
+.my-cal-bar.swap { background: repeating-linear-gradient(45deg, hsl(var(--site-hue, 210) 60% 50%) 0 4px, #f59e0b 4px 8px); }
+.day-heading { font-size: 1rem; margin: 12px 0 0; }
