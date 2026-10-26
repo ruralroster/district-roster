@@ -68,6 +68,8 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
       .gte('shift_date', rangeStart)
       .lte('shift_date', rangeEnd)
       .neq('status', 'cancelled')
+      // Hidden entries for roster-app shifts in the swap marketplace.
+      .neq('source', 'roster_shift')
       .order('shift_date')
       .order('start_time');
     if (error) setError(error.message);

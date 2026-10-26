@@ -3,9 +3,11 @@ import { supabase } from './supabase';
 import { formatShiftTime, toLocalDateStr } from './dateUtils';
 import { siteHues, siteStyle } from './siteColours';
 
-// The swap marketplace (migrations/2026-10-31_swaps.sql). Doctors list a
-// shift they're booked on, and take or swap for other people's; the site's
-// officers approve. Every write is an RPC that checks the rules again.
+// The swap marketplace (migrations/2026-10-31_swaps.sql), v3's flow:
+// doctors list a shift they're booked on (or a roster-app one, from
+// roster-app), others take it or offer one of their own in return, and the
+// site's officer approves the pairing. Until then the doctor still works
+// it. Every write is an RPC that checks the rules again.
 
 // Pay fortnights start on Mondays two weeks apart from Mon 25 May 2026 (as
 // v3 and district_fortnight_start).
@@ -67,7 +69,6 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
       ...new Set([
         ...ls.map((l) => l.notice_id),
         ...os.map((o) => o.offered_notice_id).filter(Boolean),
-        ...(marketRes.data ?? []).flatMap((m) => m.swap_options ?? []),
       ]),
     ];
     const { data: ns } = ids.length ? await supabase.from('district_notices').select('*').in('notice_id', ids) : { data: [] };
@@ -105,6 +106,8 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
   const openListing = (noticeId) => listings.find((l) => l.notice_id === noticeId && l.status === 'open');
   const myOffers = me ? offers.filter((o) => o.doctor_id === me.doctor_id) : [];
   const marketShown = market.filter((m) => !m.problem || m.swap_options?.length);
+  // Roster-app shifts appear only once listed (from roster-app).
+  const myShifts = mine.filter((n) => n.source !== 'roster_shift' || openListing(n.notice_id));
   const officerListings = listings.filter((l) => {
     const n = notices.get(l.notice_id);
     return l.status === 'open' && n && officerSiteIds.has(n.site_id);
@@ -224,16 +227,20 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
       {me && (
         <div className="card">
           <h2>My shifts</h2>
-          <p className="small muted">Your booked DR Roster shifts. List one for swap if you can't do it.</p>
-          {mine.length === 0 && <p className="muted">You're not booked on any district shifts.</p>}
+          <p className="small muted">
+            Your booked DR Roster shifts. List one for swap if you can't do it; you still work it unless a swap is approved.
+            To list a roster-app shift, use Variation → Swap a shift in roster-app.
+          </p>
+          {myShifts.length === 0 && <p className="muted">You're not booked on any district shifts.</p>}
           <ul className="rows">
-            {mine.map((n) => {
+            {myShifts.map((n) => {
               const l = openListing(n.notice_id);
               const pending = l ? offers.filter((o) => o.listing_id === l.listing_id && o.status === 'pending') : [];
               return (
                 <li key={n.notice_id} className="row column site-stripe" style={siteStyle(hues, n.site_id)}>
                   <div>
                     <ShiftText notice={n} />
+                    {n.source === 'roster_shift' && <span className="small muted"> (roster-app shift)</span>}
                     {l && <span className="badge applied">Up for swap</span>}
                     {l?.service_disruption && <span className="badge danger-badge">Service disruption</span>}
                   </div>
@@ -322,8 +329,9 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
 
 // One listing on the marketplace: take it, or offer a shift in return.
 function MarketRow({ listing: l, notice: n, row, already, lister, notices, ShiftText, style, busy, rpc }) {
-  const [offered, setOffered] = useState('');
+  const [offered, setOffered] = useState(''); // 'n:<notice_id>' or 'a:<roster-app assignment_id>'
   const options = row.swap_options ?? [];
+  const optionValue = (o) => (o.notice_id ? `n:${o.notice_id}` : `a:${o.assignment_id}`);
   const ask = (what) => window.prompt(`${what} Add a note for the officer if you like.`, '');
   return (
     <li className="row column site-stripe" style={style}>
@@ -347,7 +355,7 @@ function MarketRow({ listing: l, notice: n, row, already, lister, notices, Shift
               disabled={busy}
               onClick={() => {
                 const note = ask(`Take ${lister}'s shift?`);
-                if (note !== null) rpc('offer_for_swap', { p_listing_id: l.listing_id, p_offered_notice_id: null, p_note: note }, 'Offer sent. An officer will approve or decline it.');
+                if (note !== null) rpc('offer_for_swap', { p_listing_id: l.listing_id, p_offered_notice_id: null, p_offered_assignment_id: null, p_note: note }, 'Offer sent. An officer will approve or decline it.');
               }}
             >
               Take it
@@ -357,21 +365,24 @@ function MarketRow({ listing: l, notice: n, row, already, lister, notices, Shift
             <>
               <select value={offered} onChange={(e) => setOffered(e.target.value)} aria-label="Your shift to swap">
                 <option value="">Swap for one of mine…</option>
-                {options.map((id) => {
-                  const o = notices.get(id);
-                  return (
-                    <option key={id} value={id}>
-                      {o ? `${dayLabel(o.shift_date)} ${o.title ?? ''} ${formatShiftTime(o.start_time, o.end_time)}` : 'Your shift'}
-                    </option>
-                  );
-                })}
+                {options.map((o) => (
+                  <option key={optionValue(o)} value={optionValue(o)}>{o.label}</option>
+                ))}
               </select>
               {offered && (
                 <button
                   disabled={busy}
                   onClick={() => {
                     const note = ask(`Offer this shift to ${lister} in return?`);
-                    if (note !== null) rpc('offer_for_swap', { p_listing_id: l.listing_id, p_offered_notice_id: offered, p_note: note }, 'Swap offered. An officer will approve or decline it.');
+                    const [kind, id] = offered.split(':');
+                    if (note !== null) {
+                      rpc('offer_for_swap', {
+                        p_listing_id: l.listing_id,
+                        p_offered_notice_id: kind === 'n' ? id : null,
+                        p_offered_assignment_id: kind === 'a' ? id : null,
+                        p_note: note,
+                      }, 'Swap offered. An officer will approve or decline it.');
+                    }
                   }}
                 >
                   Offer swap

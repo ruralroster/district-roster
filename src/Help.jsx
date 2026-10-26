@@ -91,13 +91,13 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
             </ul>
           </Section>
           <Section title="Swapping a shift">
-            <ul>
-              <li>On the <strong>Swaps</strong> tab, <strong>My shifts</strong> lists the DR Roster shifts you're booked on. Tap <strong>List for swap</strong> on one you can't do.</li>
-              <li>Tick <strong>Service disruption</strong> if the shift goes uncovered when nobody takes it, so it stands out. Tick the days or nights of that pay fortnight you could work in return, or none if you just want someone to take it.</li>
-              <li>Doctors who could do it, and the site's officers, are told. <strong>Up for swap</strong> shows other people's listings you could do: <strong>Take it</strong> outright, or <strong>Swap for one of mine</strong> to offer one of your own shifts at the same site on a day they can work.</li>
-              <li>Only shifts that pass the usual rules are offered, checked for both of you as if you'd each given up your own shift: level, skills, blocked days and the 10-hour rest rule.</li>
-              <li>The site's officer approves or declines. Once approved the bookings swap over, roster-app cards included, and you're both told. You can withdraw a listing or an offer while it's waiting.</li>
-            </ul>
+            <p>The idea: the two doctors find a pairing that works for both of them on the marketplace, and the rostering officer approves it. Until then you still work your shift, so the site never loses cover.</p>
+            <ol>
+              <li><strong>List it.</strong> On the <strong>Swaps</strong> tab, <strong>My shifts</strong> lists the DR Roster shifts you're booked on: tap <strong>List for swap</strong>. For a roster-app shift, use <strong>Variation → Swap a shift (DR Roster)</strong> in roster-app. Tick <strong>Service disruption</strong> if the shift goes uncovered when nobody takes it, and tick the days or nights of that pay fortnight you could work in return (or none, if you just want someone to take it). It's on the marketplace straight away.</li>
+              <li><strong>Find a pairing.</strong> Doctors who could do the shift are told. Under <strong>Up for swap</strong> they can <strong>Take it</strong> outright, or <strong>Swap for one of mine</strong>: one of their own shifts (DR Roster or roster-app) at the same site, on a day or night you said you could work, so the swap stays in the pay fortnight. Only shifts that pass the rules for both of you are offered: level, skills, blocked days and the 10-hour rest rule, each as if you'd already given up your own shift.</li>
+              <li><strong>The officer approves.</strong> The offer goes to the site's rostering officer, who approves or declines it (with a reason). Only then do the bookings swap over, roster-app included, and you're both told.</li>
+            </ol>
+            <p>You can withdraw a listing or an offer until the officer decides.</p>
           </Section>
           <Section title="Applying, and what happens next">
             <ol>
@@ -137,10 +137,10 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           </Section>
           <Section title="Swaps at your sites">
             <ul>
-              <li>When a doctor lists one of your sites' shifts for swap, you're told. It shows on the <strong>Swaps</strong> tab, marked if it's a service disruption.</li>
-              <li>Offers come in as <strong>will take it</strong>, or a swap for one of their own shifts at the same site. <strong>Approve</strong> moves the bookings (and the roster-app card); <strong>Decline</strong> asks for an optional reason. Both doctors are told either way.</li>
-              <li>The rules are checked again when you approve, so a swap that no longer works is refused with the reason.</li>
-              <li><strong>Take it off the swap list</strong> removes a listing, with an optional reason for the doctor. A listed shift that you reopen, cancel or rebook comes off the list by itself.</li>
+              <li>Doctors list shifts they can't do on the Swaps tab (or roster-app shifts from roster-app) and find a pairing among themselves: someone taking it, or swapping one of their own shifts at the same site in the same pay fortnight. You're told once there's an offer to decide.</li>
+              <li>On the <strong>Swaps</strong> tab, each listing shows its offers. <strong>Approve</strong> checks the rules again and moves the bookings (roster-app too: to the doctor's own booking if they're staff there, otherwise as a visitor marked From DR Roster). <strong>Decline</strong> asks for an optional reason. Both doctors are told either way.</li>
+              <li>Until you approve, the doctor who listed it still works it.</li>
+              <li><strong>Take it off the swap list</strong> removes a listing, with an optional reason for the doctor. A listed shift that's reopened, cancelled, rebooked, or changed on roster-app comes off the list by itself.</li>
             </ul>
           </Section>
           <Section title="Gaps from roster-app">
