@@ -18,7 +18,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const SKILLS = ['Emergency', 'Anaesthetics', 'O&G'];
+const SKILLS = ['Emergency', 'Anaesthetics', 'O&G', 'Endoscopy'];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

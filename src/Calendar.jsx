@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { supabase, SKILLS } from './supabase';
+import { supabase, SKILLS, POSITIONS, POSITION_LABEL } from './supabase';
 import { getMondayOfWeek, toLocalDateStr, isSameDate, formatShiftTime } from './dateUtils';
 import BulkShifts from './BulkShifts';
 
@@ -294,7 +294,7 @@ function DayPanel({ date, notices, applications, availability, unavailable, view
                 {n.status === 'open' ? 'Open' : `Filled: ${doctorName(n.filled_by_doctor_id)}`}
               </span>
               <div className="muted small">
-                {n.required_skill === 'Emergency' ? 'Any doctor' : `Needs ${n.required_skill}`}
+                {POSITION_LABEL[n.position] ?? 'Consultant'} · {n.required_skill === 'Emergency' ? 'Any doctor' : `Needs ${n.required_skill}`}
                 {n.notes && ` · ${n.notes}`}
               </div>
               {view === 'doctor' && (
@@ -451,7 +451,7 @@ function Applicants({ notice, applications, doctors, rpc }) {
 }
 
 function PostShift({ sites, shiftTypes, defaultDate, onPosted }) {
-  const blank = { site_id: '', shift_date: '', title: '', start_time: '08:00', end_time: '17:00', required_skill: 'Emergency', notes: '' };
+  const blank = { site_id: '', shift_date: '', title: '', start_time: '08:00', end_time: '17:00', required_skill: 'Emergency', position: 'consultant', notes: '' };
   const [form, setForm] = useState(blank);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -527,6 +527,14 @@ function PostShift({ sites, shiftTypes, defaultDate, onPosted }) {
         <label>
           Finish
           <input type="time" value={form.end_time} onChange={set('end_time')} required />
+        </label>
+        <label>
+          Position
+          <select value={form.position} onChange={set('position')}>
+            {POSITIONS.map((k) => (
+              <option key={k} value={k}>{POSITION_LABEL[k]}</option>
+            ))}
+          </select>
         </label>
         <label>
           Needs

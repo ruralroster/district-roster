@@ -28,12 +28,80 @@
 --    withdrawn on roster-app, the district shift is cancelled.
 --
 -- 3. Approving: the officer is told which skills the card needs for the
---    role (district_card_skills), and can still approve anyone.
+--    role (district_card_skills), and can still approve anyone. Only for a
+--    consultant position: a registrar or junior doesn't need the
+--    consultant's skill.
+--
+-- 4. Endoscopy is a skill, alongside Anaesthetics and O&G.
+--
+-- 5. Every district shift has a position: consultant (the default, so
+--    every shift posted so far), registrar or junior. A doctor booked
+--    from a registrar or junior shift goes on the roster-app card as a
+--    registrar, never as a consultant. Escalated shifts take the offer's
+--    role (a registrar offer on an intern card is junior), and a posted
+--    shift is only linked to an offer for the same level. A consultant
+--    shift needs the skill the card's consultant needs; registrar and
+--    junior shifts are open to any doctor.
 --
 -- Run after 2026-10-28c_escalation.sql and roster-app's
 -- 2026-10-28_card_visitors_without_place.sql. Safe to re-run.
 
 BEGIN;
+
+ALTER TABLE district_doctors DROP CONSTRAINT IF EXISTS district_doctors_skills_check;
+ALTER TABLE district_doctors ADD CONSTRAINT district_doctors_skills_check CHECK (
+  skills <@ ARRAY['Emergency', 'Anaesthetics', 'O&G', 'Endoscopy'] AND 'Emergency' = ANY (skills));
+ALTER TABLE district_notices DROP CONSTRAINT IF EXISTS district_notices_skill_check;
+ALTER TABLE district_notices ADD CONSTRAINT district_notices_skill_check
+  CHECK (required_skill IN ('Emergency', 'Anaesthetics', 'O&G', 'Endoscopy'));
+ALTER TABLE site_shift_types DROP CONSTRAINT IF EXISTS site_shift_types_skill_check;
+ALTER TABLE site_shift_types ADD CONSTRAINT site_shift_types_skill_check
+  CHECK (required_skill IN ('Emergency', 'Anaesthetics', 'O&G', 'Endoscopy'));
+
+ALTER TABLE district_notices ADD COLUMN IF NOT EXISTS position text NOT NULL DEFAULT 'consultant';
+ALTER TABLE district_notices DROP CONSTRAINT IF EXISTS district_notices_position_check;
+ALTER TABLE district_notices ADD CONSTRAINT district_notices_position_check
+  CHECK (position IN ('consultant', 'registrar', 'junior'));
+
+-- roster-app advanced skills in district terms. Unknown ones are left to
+-- the officer (district_card_skills names them when approving).
+CREATE OR REPLACE FUNCTION district_skill_for(p_skill_ids uuid[])
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM advanced_skills k WHERE k.advanced_skill_id = ANY (p_skill_ids) AND k.name ~* 'an(a)?esth') THEN 'Anaesthetics'
+    WHEN EXISTS (SELECT 1 FROM advanced_skills k WHERE k.advanced_skill_id = ANY (p_skill_ids) AND k.name ~* 'obst|o\s*&\s*g|\mobs\M') THEN 'O&G'
+    WHEN EXISTS (SELECT 1 FROM advanced_skills k WHERE k.advanced_skill_id = ANY (p_skill_ids) AND k.name ~* 'endosc|scope') THEN 'Endoscopy'
+    ELSE 'Emergency'
+  END;
+$$;
+REVOKE EXECUTE ON FUNCTION district_skill_for(uuid[]) FROM PUBLIC, anon, authenticated;
+
+-- The advanced skills a card's consultant needs: the card's activity's,
+-- plus its job's senior (and 'any') places'.
+CREATE OR REPLACE FUNCTION district_consultant_skill_ids(p_theatre_activity_id uuid)
+RETURNS uuid[]
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT coalesce(array_agg(DISTINCT id), '{}')
+  FROM (
+    SELECT unnest(act.required_advanced_skills) AS id
+    FROM theatre_activities ta JOIN activity_types act ON act.activity_id = ta.activity_id
+    WHERE ta.theatre_activity_id = p_theatre_activity_id
+    UNION
+    SELECT unnest(p.required_advanced_skills)
+    FROM theatre_activities ta JOIN job_places p ON p.job_type_id = ta.job_type_id
+    WHERE ta.theatre_activity_id = p_theatre_activity_id AND p.grade IN ('senior', 'any') AND p.kind <> 'visitor'
+  ) x;
+$$;
+REVOKE EXECUTE ON FUNCTION district_consultant_skill_ids(uuid) FROM PUBLIC, anon, authenticated;
 
 ALTER TABLE district_escalations
   ADD COLUMN IF NOT EXISTS assignment_id uuid,
@@ -241,6 +309,9 @@ BEGIN
      AND n.end_time = coalesce(ta.end_time, sh.end_time)
      AND n.status IN ('open', 'filled')
      AND n.source <> 'roster_app'
+     -- Same level: a consultant offer for a consultant shift, a registrar
+     -- offer for a registrar or junior one.
+     AND (n.position = 'consultant') = (o.role = 'consultant')
     WHERE NOT EXISTS (SELECT 1 FROM district_escalations e WHERE e.volunteer_offer_id = o.volunteer_offer_id)
       AND NOT EXISTS (SELECT 1 FROM district_escalations e WHERE e.notice_id = n.notice_id)
       AND NOT district_offer_filled(o.volunteer_offer_id)
@@ -301,11 +372,14 @@ BEGIN
       WHERE NOT EXISTS (SELECT 1 FROM district_escalations e WHERE e.volunteer_offer_id = o.volunteer_offer_id)
     )
     SELECT offers.*,
-           CASE
-             WHEN EXISTS (SELECT 1 FROM advanced_skills k WHERE k.advanced_skill_id = ANY (offers.required_advanced_skills) AND k.name ~* 'an(a)?esth') THEN 'Anaesthetics'
-             WHEN EXISTS (SELECT 1 FROM advanced_skills k WHERE k.advanced_skill_id = ANY (offers.required_advanced_skills) AND k.name ~* 'obst|o\s*&\s*g|\mobs\M') THEN 'O&G'
-             ELSE 'Emergency'
-           END AS skill
+           -- A consultant needs the card's consultant skill; registrars and
+           -- juniors are open to any doctor.
+           CASE WHEN offers.role = 'consultant'
+                THEN district_skill_for(district_consultant_skill_ids(offers.theatre_activity_id))
+                ELSE 'Emergency' END AS skill,
+           CASE WHEN offers.role = 'consultant' THEN 'consultant'
+                WHEN offers.required_grade = 'intern' THEN 'junior'
+                ELSE 'registrar' END AS position
     FROM offers
     WHERE offers.start_time IS NOT NULL AND offers.end_time IS NOT NULL
       AND ((offers.date + offers.start_time) AT TIME ZONE 'Australia/Brisbane') > now()
@@ -313,10 +387,10 @@ BEGIN
       AND (now() >= offers.created_at + make_interval(hours => offers.escalate_after_hours)
            OR ((offers.date + offers.start_time) AT TIME ZONE 'Australia/Brisbane') <= now() + make_interval(hours => offers.escalate_after_hours))
   LOOP
-    INSERT INTO district_notices (site_id, shift_date, start_time, end_time, required_skill, title, notes, source)
+    INSERT INTO district_notices (site_id, shift_date, start_time, end_time, required_skill, position, title, notes, source)
     VALUES (
-      v_row.site_id, v_row.date, v_row.start_time, v_row.end_time, v_row.skill,
-      format('%s (%s)', v_row.job, initcap(v_row.role)),
+      v_row.site_id, v_row.date, v_row.start_time, v_row.end_time, v_row.skill, v_row.position,
+      format('%s (%s)', v_row.job, initcap(v_row.position)),
       concat_ws(' · ', 'Not filled locally', CASE v_row.required_grade WHEN 'smo' THEN 'Needs an SMO' WHEN 'registrar' THEN 'Registrar or above' END),
       'roster_app'
     )
@@ -332,9 +406,8 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION district_escalate_offers() FROM PUBLIC, anon, authenticated;
 
--- For the officer approving: the advanced skills the roster-app card
--- needs for the offered role (the card's activity, plus its job's places
--- for that role — a senior place is a consultant's), and which district
+-- For the officer approving a consultant: the advanced skills the
+-- roster-app card's consultant needs, and which district
 -- doctors hold one on roster-app (staff in that department). The officer
 -- can still approve someone not on the list.
 CREATE OR REPLACE FUNCTION district_card_skills(p_notice_id uuid)
@@ -358,18 +431,12 @@ BEGIN
   IF NOT FOUND THEN
     RETURN jsonb_build_object('skills', '[]'::jsonb, 'holders', '[]'::jsonb);
   END IF;
+  -- A registrar or junior doesn't need the consultant's skill.
+  IF v_esc.role <> 'consultant' THEN
+    RETURN jsonb_build_object('skills', '[]'::jsonb, 'holders', '[]'::jsonb);
+  END IF;
   SELECT * INTO v_card FROM theatre_activities WHERE theatre_activity_id = v_esc.theatre_activity_id;
-
-  SELECT array_agg(DISTINCT id) INTO v_ids
-  FROM (
-    SELECT unnest(act.required_advanced_skills) AS id
-    FROM activity_types act WHERE act.activity_id = v_card.activity_id
-    UNION
-    SELECT unnest(p.required_advanced_skills)
-    FROM job_places p
-    WHERE p.job_type_id = v_card.job_type_id
-      AND (p.grade = 'any' OR (p.grade = 'senior') = (v_esc.role = 'consultant'))
-  ) x;
+  v_ids := district_consultant_skill_ids(v_esc.theatre_activity_id);
 
   RETURN jsonb_build_object(
     'skills', coalesce((SELECT jsonb_agg(k.name ORDER BY k.name) FROM advanced_skills k WHERE k.advanced_skill_id = ANY (v_ids)), '[]'::jsonb),

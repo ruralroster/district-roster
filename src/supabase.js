@@ -17,4 +17,9 @@ export const supabase = createClient(url, anonKey);
 // Redirect URLs entry https://ruralroster.github.io/district-roster/*
 export const appUrl = window.location.origin + window.location.pathname;
 
-export const SKILLS = ['Emergency', 'Anaesthetics', 'O&G'];
+export const SKILLS = ['Emergency', 'Anaesthetics', 'O&G', 'Endoscopy'];
+
+// A district shift's level. A registrar or junior shift books the doctor
+// onto a roster-app card as a registrar.
+export const POSITIONS = ['consultant', 'registrar', 'junior'];
+export const POSITION_LABEL = { consultant: 'Consultant', registrar: 'Registrar', junior: 'Junior' };

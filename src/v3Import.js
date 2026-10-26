@@ -42,6 +42,7 @@ export function readSkills(ast) {
     if (/^emerg/i.test(word)) found.add('Emergency');
     else if (/^ana?esth/i.test(word)) found.add('Anaesthetics');
     else if (/^(o\s*&\s*g|obs|obt)/i.test(word)) found.add('O&G'); // obt: v3's "Obtetrics"
+    else if (/^(endo|scope)/i.test(word)) found.add('Endoscopy');
   }
   return SKILLS.filter((s) => found.has(s));
 }

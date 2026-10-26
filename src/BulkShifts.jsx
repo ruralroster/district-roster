@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { supabase, SKILLS } from './supabase';
+import { supabase, SKILLS, POSITIONS, POSITION_LABEL } from './supabase';
 import { formatShiftTime, toLocalDateStr } from './dateUtils';
-import { readPastedVacancies, shiftTypeIn } from './pasteVacancies';
+import { positionIn, readPastedVacancies, shiftTypeIn } from './pasteVacancies';
 import { readDate, readTime } from './v3Import';
 
 const skillText = (skill) => (skill === 'Emergency' ? 'Any doctor' : `Needs ${skill}`);
@@ -25,7 +25,7 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
   const today = toLocalDateStr(new Date());
 
   // A preview row: one shift, editable. type is a shift_type_id or 'custom'.
-  function makeRow(site_id, date, type, times, from) {
+  function makeRow(site_id, date, type, times, from, position = 'consultant') {
     return {
       key: `${site_id}|${date}|${Math.random()}`,
       site_id,
@@ -34,6 +34,7 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
       start_time: type?.start_time.slice(0, 5) ?? times?.start ?? '08:00',
       end_time: type?.end_time.slice(0, 5) ?? times?.end ?? '17:00',
       required_skill: type?.required_skill ?? 'Emergency',
+      position,
       from,
       post: !!date && date >= today && !!(type || times),
     };
@@ -64,7 +65,7 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
     setError('');
     setMessage('');
     const { vacancies, unread } = readPastedVacancies(text, typesAt(siteId), siteName(siteId));
-    setRows(await markPosted(vacancies.map((v) => makeRow(siteId, v.date, v.shiftType, v.times, v.line))));
+    setRows(await markPosted(vacancies.map((v) => makeRow(siteId, v.date, v.shiftType, v.times, v.line, positionIn(v.line)))));
     setNotes(unread.map((line) => `No date found for: ${line}`));
   }
 
@@ -91,6 +92,7 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
         const cDate = col('date');
         const cShift = col('shift', 'shift type', 'job type', 'job');
         const cStart = col('start', 'start time');
+        const cPosition = col('position', 'level', 'grade');
         const cEnd = col('finish', 'end', 'end time', 'finish time');
         if (cDate === -1) {
           skipped.push(`${tab} (no Date column)`);
@@ -107,7 +109,8 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
           const start = cStart === -1 ? '' : readTime(line[cStart]);
           const end = cEnd === -1 ? '' : readTime(line[cEnd]);
           const times = !type && start && end ? { start, end } : null;
-          found.push(makeRow(site.site_id, date, type, times, [tab, clean(line[cDate]), shiftName].filter(Boolean).join(' · ')));
+          const position = positionIn(cPosition === -1 ? shiftName : clean(line[cPosition]));
+          found.push(makeRow(site.site_id, date, type, times, [tab, clean(line[cDate]), shiftName].filter(Boolean).join(' · '), position));
         }
       }
       found.sort((a, b) => a.date.localeCompare(b.date));
@@ -146,6 +149,7 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
           start_time: r.start_time,
           end_time: r.end_time,
           required_skill: r.required_skill,
+          position: r.position,
           title: type?.name ?? null,
           notes: type?.notes ?? null,
         };
@@ -194,7 +198,8 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
           <p className="small muted">
             One tab per site, named exactly as the site (e.g. "Yarrabah"), with a <strong>Date</strong> column and a{' '}
             <strong>Shift</strong> column naming the site's shift type. Start and Finish columns are optional, for shifts
-            that aren't a regular type.
+            that aren't a regular type. A Position column (Consultant, Registrar or Junior) is optional too; without one,
+            a shift is a consultant shift unless its name says reg or junior.
           </p>
           <input type="file" accept=".xlsx,.xls,.csv" onChange={readFile} />
         </>
@@ -224,6 +229,11 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
                       </option>
                     ))}
                     <option value="custom">Other times…</option>
+                  </select>
+                  <select value={r.position} onChange={(e) => edit(r.key, { position: e.target.value })} aria-label="Position">
+                    {POSITIONS.map((k) => (
+                      <option key={k} value={k}>{POSITION_LABEL[k]}</option>
+                    ))}
                   </select>
                   {r.type === 'custom' && (
                     <>

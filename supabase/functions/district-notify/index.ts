@@ -59,7 +59,11 @@ function times(n) {
 }
 
 // "Mon 3 Nov · Yarrabah · Emergency (Plus On-call) 08:00–08:00 (24h)"
-const shiftLine = (n) => `${dayLabel(n.shift_date)} · ${n.sites?.name ?? ''} · ${n.title ? `${n.title} ` : ''}${times(n)}`;
+// "Registrar"/"Junior" unless the title already says so (escalated shifts'
+// titles do); consultant is the default and goes unsaid.
+const LEVEL = { registrar: 'Registrar', junior: 'Junior' };
+const levelText = (n) => (LEVEL[n.position] && !(n.title ?? '').includes(LEVEL[n.position]) ? `${LEVEL[n.position]} ` : '');
+const shiftLine = (n) => `${dayLabel(n.shift_date)} · ${n.sites?.name ?? ''} · ${levelText(n)}${n.title ? `${n.title} ` : ''}${times(n)}`;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -174,7 +178,7 @@ async function officerNews(admin) {
     .update({ officer_notified_at: new Date().toISOString() })
     .is('officer_notified_at', null)
     .in('status', ['pending', 'withdrawn'])
-    .select('status, note, district_notices(site_id, shift_date, start_time, end_time, title, sites(name, department_id)), district_doctors(name)');
+    .select('status, note, district_notices(site_id, shift_date, start_time, end_time, title, position, sites(name, department_id)), district_doctors(name)');
   if (error) throw error;
   if (!claimed?.length) return 0;
 
@@ -221,7 +225,7 @@ async function doctorNews(admin) {
     .update({ doctor_notified_at: new Date().toISOString() })
     .is('doctor_notified_at', null)
     .in('status', ['approved', 'declined', 'cancelled'])
-    .select('status, decline_reason, doctor_id, district_notices(shift_date, start_time, end_time, title, sites(name)), district_doctors(user_id, email, name, notify_email, notify_push)');
+    .select('status, decline_reason, doctor_id, district_notices(shift_date, start_time, end_time, title, position, sites(name)), district_doctors(user_id, email, name, notify_email, notify_push)');
   if (error) throw error;
 
   const byDoctor = new Map();
