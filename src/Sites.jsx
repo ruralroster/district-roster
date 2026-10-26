@@ -135,7 +135,7 @@ function Escalation({ site, canEdit, onChanged }) {
     onChanged();
   }
 
-  const explain = `Gaps offered on roster-app go to the district after ${saved} hours unfilled, or straight away if the shift starts within ${saved} hours.`;
+  const explain = `Gaps offered on roster-app go to the district after ${saved} hours unfilled, or straight away if the shift starts within ${saved} hours. Shifts posted here in DR Roster go to the district at once.`;
   if (!canEdit) return <p className="small muted">{explain}</p>;
   return (
     <form className="inline small" onSubmit={save}>
