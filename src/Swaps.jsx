@@ -127,7 +127,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
 
   const openListing = (noticeId) => listings.find((l) => l.notice_id === noticeId && l.status === 'open');
   const myOffers = me ? offers.filter((o) => o.doctor_id === me.doctor_id) : [];
-  const marketShown = market.filter((m) => !m.problem || m.swap_options?.length);
+  const marketShown = market.filter((m) => m.swap_options?.length);
   // Every shift I work: DR Roster bookings, and roster-app shifts at the
   // district's sites (my primary site's roster included). A DR Roster
   // booking that's also on a roster-app card shows once, as the DR one.
@@ -237,8 +237,9 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
         <div className="card">
           <h2>Up for swap</h2>
           <p className="small muted">
-            Shifts other doctors want to give up that you could do. Take one outright, or swap one of your own shifts at the
-            same site for it, on a day they can work. An officer approves every swap.
+            Only swaps you could actually do: their shift for one of yours at the same site, on a day or night they can work,
+            with both of you passing the rules afterwards (your roster-app roster counts). It's always one for one, so nobody's
+            shifts in the fortnight go down. An officer approves every swap.
           </p>
           {marketShown.length === 0 && <p className="muted">Nothing up for swap that you could do.</p>}
           <ul className="rows">
@@ -469,7 +470,9 @@ function MyShiftRow({ item, offers, name, notices, ShiftText, style, listing, se
       {l ? (
         <>
           {l.available_slots.length > 0 && (
-            <div className="small muted">You can work in return: {l.available_slots.map(slotLabel).join(', ')}</div>
+            <div className="small muted">
+              You can work in return: {l.available_slots.map(slotLabel).join(', ')}
+            </div>
           )}
           <div className="small">
             {pending.length === 0
@@ -534,19 +537,6 @@ function MarketRow({ listing: l, notice: n, row, already, lister, notices, Shift
         </div>
       ) : (
         <div className="inline small">
-          {row.problem ? (
-            <span className="muted">You can't take it outright: {row.problem}.</span>
-          ) : (
-            <button
-              disabled={busy}
-              onClick={() => {
-                const note = ask(`Take ${lister}'s shift?`);
-                if (note !== null) rpc('offer_for_swap', { p_listing_id: l.listing_id, p_offered_notice_id: null, p_offered_assignment_id: null, p_note: note }, 'Offer sent. An officer will approve or decline it.');
-              }}
-            >
-              Take it
-            </button>
-          )}
           {options.length > 0 && (
             <>
               <select value={offered} onChange={(e) => setOffered(e.target.value)} aria-label="Your shift to swap">
@@ -583,7 +573,8 @@ function MarketRow({ listing: l, notice: n, row, already, lister, notices, Shift
 }
 
 // Listing a shift: service disruption, and the days/nights of its pay
-// fortnight you could work in return (none: they can only take it).
+// fortnight you could work in return (at least one: a swap never changes
+// anyone's number of shifts).
 function ListForm({ date, busy, onCancel, onSubmit }) {
   const [disruption, setDisruption] = useState(false);
   const [slots, setSlots] = useState([]);
@@ -604,7 +595,10 @@ function ListForm({ date, busy, onCancel, onSubmit }) {
         Service disruption: if nobody takes it, the shift goes uncovered
       </label>
       <div>
-        <div>Days or nights you could work in return (this pay fortnight). Leave them all clear if you only want someone to take it.</div>
+        <div>
+          Days or nights you could work in return (this pay fortnight): tick at least one. Whoever takes your shift gives you one of
+          theirs on one of them, so neither of you ends up with fewer shifts.
+        </div>
         <div className="slot-grid">
           <span />
           <span className="muted">Day</span>
@@ -619,7 +613,7 @@ function ListForm({ date, busy, onCancel, onSubmit }) {
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Family wedding" />
       </label>
       <div className="inline">
-        <button type="submit" disabled={busy}>List for swap</button>
+        <button type="submit" disabled={busy || slots.length === 0}>List for swap</button>
         <button type="button" className="secondary" onClick={onCancel}>Cancel</button>
       </div>
     </form>
