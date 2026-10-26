@@ -22,12 +22,21 @@
 //   Each person is done on their own, so one failure doesn't stop the rest.
 //   Someone who already has a login (e.g. roster-app) is linked without an
 //   email.
+//
+// The invite email is DR Roster's own, sent through Gmail (the project's
+// GMAIL_USER / GMAIL_APP_PASSWORD, like district-notify), with a sign-up
+// link from Supabase (generateLink). That avoids Supabase's built-in email
+// limit of a few an hour, and its invite template, which is shared with
+// roster-app.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import nodemailer from 'npm:nodemailer@6.9.16';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const GMAIL_USER = Deno.env.get('GMAIL_USER');
+const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD');
 
 const SKILLS = ['Emergency', 'Anaesthetics', 'O&G', 'Endoscopy'];
 
@@ -102,13 +111,13 @@ Deno.serve(async (req) => {
     // Doctors in this district who have no login yet.
     const { data: doctors } = await adminClient
       .from('district_doctors')
-      .select('doctor_id, email')
+      .select('doctor_id, email, name')
       .eq('district_id', districtId)
       .is('user_id', null)
       .in('doctor_id', body.doctorIds?.length ? body.doctorIds : ['00000000-0000-0000-0000-000000000000']);
     for (const d of doctors ?? []) {
       try {
-        const { userId, invited } = await loginFor(adminClient, d.email, redirectTo);
+        const { userId, invited } = await loginFor(adminClient, d.email, redirectTo, d.name);
         const { error } = await adminClient.from('district_doctors').update({ user_id: userId }).eq('doctor_id', d.doctor_id);
         if (error) throw error;
         results.push({ email: d.email, invited, linked: !invited });
@@ -122,13 +131,14 @@ Deno.serve(async (req) => {
     const { data: pending } = emails.length
       ? await adminClient
         .from('site_officer_pending')
-        .select('site_id, email, sites!inner(district_id)')
+        .select('site_id, email, name, sites!inner(district_id)')
         .eq('sites.district_id', districtId)
         .in('email', emails)
       : { data: [] };
     for (const officerEmail of [...new Set((pending ?? []).map((p) => p.email))]) {
       try {
-        const { userId, invited } = await loginFor(adminClient, officerEmail, redirectTo);
+        const officerName = (pending ?? []).find((x) => x.email === officerEmail && x.name)?.name;
+        const { userId, invited } = await loginFor(adminClient, officerEmail, redirectTo, officerName, true);
         if (!invited) {
           // Their profile already existed, so the claim trigger won't fire.
           for (const p of (pending ?? []).filter((x) => x.email === officerEmail)) {
@@ -157,35 +167,13 @@ Deno.serve(async (req) => {
     return json({ error: `${email} is already a doctor in this district` }, 409);
   }
 
-  const { data: existingProfile } = await adminClient
-    .from('profiles')
-    .select('user_id')
-    .ilike('email', email)
-    .maybeSingle();
-
-  let invited = false;
+  // Already has a login (roster-app or another district): link, no invite.
+  let invited: boolean;
   let targetUserId: string;
-
-  if (existingProfile) {
-    // Already has a login (roster-app or another district): link, no invite.
-    targetUserId = existingProfile.user_id;
-  } else {
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      email,
-      redirectTo ? { redirectTo } : undefined,
-    );
-    if (inviteError) {
-      return json({ error: `Invite failed: ${inviteError.message}` }, 500);
-    }
-    targetUserId = inviteData.user.id;
-    invited = true;
-
-    const { error: profileError } = await adminClient
-      .from('profiles')
-      .upsert({ user_id: targetUserId, email });
-    if (profileError) {
-      return json({ error: `Profile link failed: ${profileError.message}` }, 500);
-    }
+  try {
+    ({ userId: targetUserId, invited } = await loginFor(adminClient, email, redirectTo, name));
+  } catch (e) {
+    return json({ error: e.message ?? String(e) }, 500);
   }
 
   const { data: doctor, error: doctorError } = await adminClient
@@ -208,8 +196,10 @@ Deno.serve(async (req) => {
 });
 
 // The login for an email: an existing one (no email sent), or a new one
-// with an invite email. Makes sure the profile row exists.
-async function loginFor(adminClient, email: string, redirectTo?: string) {
+// with DR Roster's invite email. Makes sure the profile row exists. If the
+// email can't be sent, the new login is removed again, so trying later
+// starts afresh rather than finding a login nobody was told about.
+async function loginFor(adminClient, email: string, redirectTo?: string, name?: string, asOfficer = false) {
   const { data: existingProfile } = await adminClient
     .from('profiles')
     .select('user_id')
@@ -217,14 +207,59 @@ async function loginFor(adminClient, email: string, redirectTo?: string) {
     .maybeSingle();
   if (existingProfile) return { userId: existingProfile.user_id, invited: false };
 
-  const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) throw new Error('GMAIL_USER / GMAIL_APP_PASSWORD not set');
+  const { data: link, error: linkError } = await adminClient.auth.admin.generateLink({
+    type: 'invite',
     email,
-    redirectTo ? { redirectTo } : undefined,
-  );
-  if (inviteError) throw new Error(`Invite failed: ${inviteError.message}`);
-  const { error: profileError } = await adminClient
-    .from('profiles')
-    .upsert({ user_id: inviteData.user.id, email });
+    options: redirectTo ? { redirectTo } : undefined,
+  });
+  if (linkError) throw new Error(`Invite failed: ${linkError.message}`);
+  const userId = link.user.id;
+
+  try {
+    await sendInvite(email, link.properties.action_link, name, asOfficer);
+  } catch (e) {
+    await adminClient.auth.admin.deleteUser(userId).catch(() => {});
+    throw new Error(`Invite email failed: ${e.message ?? e}`);
+  }
+
+  const { error: profileError } = await adminClient.from('profiles').upsert({ user_id: userId, email });
   if (profileError) throw new Error(`Profile link failed: ${profileError.message}`);
-  return { userId: inviteData.user.id, invited: true };
+  return { userId, invited: true };
+}
+
+let transporter;
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+async function sendInvite(to: string, link: string, name?: string, asOfficer = false) {
+  transporter ??= nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+  });
+  const hello = name ? `Hi ${name.split(/\s+/)[0]},` : 'Hi,';
+  const what = asOfficer
+    ? "You've been set up as a rostering officer on DR Roster, the district's shift board, where your site's shifts go out to doctors across the district."
+    : "You've been invited to DR Roster, the district's shift board. You'll see shifts at the sites you'd work at that fit your level, skills and roster, and can apply for them from your phone.";
+  const text = [
+    hello,
+    '',
+    what,
+    '',
+    'Set your password to get started:',
+    link,
+    '',
+    'Then add DR Roster to your Home Screen so it opens like an app, and turn on notifications in My profile.',
+    '',
+    'DR Roster',
+  ].join('\n');
+  const html = [
+    `<p>${escapeHtml(hello)}</p>`,
+    `<p>${escapeHtml(what)}</p>`,
+    `<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#1f6fb2;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Set your password</a></p>`,
+    `<p style="color:#555;font-size:14px">Then add DR Roster to your Home Screen so it opens like an app, and turn on notifications in My profile.</p>`,
+    `<p>DR Roster</p>`,
+  ].join('\n');
+  await transporter.sendMail({ from: `"DR Roster" <${GMAIL_USER}>`, to, subject: "You're invited to DR Roster", text, html });
 }
