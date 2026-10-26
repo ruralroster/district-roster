@@ -127,8 +127,9 @@ button.danger { color: var(--danger); }
 .cal-applied:hover { background: #d97706; }
 .cal-off { background: #e5e7eb; border-color: #9ca3af; color: #6b7280; text-decoration: line-through; }
 .cal-off:hover { background: #d1d5db; }
-.cal-working { background: #f1f3f5; border-color: #d1d5db; color: #374151; }
-.cal-working:hover { background: #e5e7eb; }
+/* As roster-app's greyed-out availability days (gray-50/300/400). */
+.cal-working { background: #f9fafb; border-color: #d1d5db; color: #9ca3af; }
+.cal-working:hover { background: #f3f4f6; }
 
 .cal-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .cal-legend div { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #4b5563; }
