@@ -41,6 +41,17 @@ function savedView() {
   }
 }
 
+// Up for swap / Find a swap look at the same site only, unless this is
+// ticked. Not remembered: it's off each time.
+function SiteScope({ otherSites, setOtherSites }) {
+  return (
+    <label className="check small">
+      <input type="checkbox" checked={otherSites} onChange={(e) => setOtherSites(e.target.checked)} />
+      Look across sites
+    </label>
+  );
+}
+
 const dayLabel = (dateStr) =>
   new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
 // "2026-11-03:night" -> "Tue 3 Nov night"
@@ -61,6 +72,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [otherSites, setOtherSites] = useState(false);
   const today = toLocalDateStr(new Date());
   const hues = siteHues(sites);
 
@@ -72,7 +84,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
         : { data: [] },
       supabase.from('district_swap_listings').select('*').eq('district_id', districtId).order('created_at', { ascending: false }).limit(300),
       supabase.from('district_swap_offers').select('*').order('created_at', { ascending: false }).limit(300),
-      me ? supabase.rpc('my_swap_market', { p_district_id: districtId }) : { data: [] },
+      me ? supabase.rpc('my_swap_market', { p_district_id: districtId, p_other_sites: otherSites }) : { data: [] },
       supabase.from('district_doctors').select('doctor_id, name').eq('district_id', districtId),
       me ? supabase.rpc('my_roster_swap_shifts', { p_from: today, p_to: addDays(today, WEEKS_AHEAD * 7) }) : { data: [] },
     ]);
@@ -95,7 +107,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
     ];
     const { data: ns } = ids.length ? await supabase.from('district_notices').select('*').in('notice_id', ids) : { data: [] };
     setNotices(new Map([...(ns ?? []), ...(mineRes.data ?? [])].map((n) => [n.notice_id, n])));
-  }, [districtId, me, today]);
+  }, [districtId, me, today, otherSites]);
 
   useEffect(() => {
     load();
@@ -114,6 +126,16 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
   }
 
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
+  // Across sites: has my side approved already (waiting for the other)?
+  const approvedByMe = (o, n) => {
+    const offered = notices.get(o.offered_notice_id);
+    if (!offered || offered.site_id === n.site_id) return false;
+    const mine = [
+      officerSiteIds.has(n.site_id) && !o.listing_site_approved_by,
+      officerSiteIds.has(offered.site_id) && !o.offered_site_approved_by,
+    ];
+    return !mine.some(Boolean);
+  };
   const name = (doctorId) => doctors.get(doctorId) ?? 'A doctor';
   const ShiftText = ({ notice }) =>
     notice ? (
@@ -159,9 +181,13 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
       }))
       .filter((r) => !drShifts.some((n) => sameShift(n, r.shift))),
   ].sort((a, b) => a.shift.shift_date.localeCompare(b.shift.shift_date) || a.shift.start_time.localeCompare(b.shift.start_time));
+  // Listings at my sites, and ones elsewhere with an offer of a shift at
+  // one of my sites (a swap across sites: both sites' officers approve).
+  const offeredHere = (o) => o.status === 'pending' && officerSiteIds.has(notices.get(o.offered_notice_id)?.site_id);
   const officerListings = listings.filter((l) => {
     const n = notices.get(l.notice_id);
-    return l.status === 'open' && n && officerSiteIds.has(n.site_id);
+    return l.status === 'open' && n
+      && (officerSiteIds.has(n.site_id) || offers.some((o) => o.listing_id === l.listing_id && offeredHere(o)));
   });
 
   return (
@@ -180,7 +206,8 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
           <ul className="rows">
             {officerListings.map((l) => {
               const n = notices.get(l.notice_id);
-              const pending = offers.filter((o) => o.listing_id === l.listing_id && o.status === 'pending');
+              const mySite = officerSiteIds.has(n.site_id);
+              const pending = offers.filter((o) => o.listing_id === l.listing_id && o.status === 'pending' && (mySite || offeredHere(o)));
               return (
                 <li key={l.listing_id} className="row column site-stripe" style={siteStyle(hues, n.site_id)}>
                   <div>
@@ -203,11 +230,14 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
                             'will take it'
                           )}
                           {o.note && <span className="muted"> "{o.note}"</span>}
+                          <CrossSiteStatus offer={o} notice={n} offered={notices.get(o.offered_notice_id)} siteName={siteName} />
                         </span>
                         <span className="inline">
-                          <button disabled={busy} onClick={() => rpc('approve_swap_offer', { p_offer_id: o.offer_id }, 'Swap approved. Both doctors have been told.')}>
-                            Approve
-                          </button>
+                          {!approvedByMe(o, n) && (
+                            <button disabled={busy} onClick={() => rpc('approve_swap_offer', { p_offer_id: o.offer_id }, 'Approved.')}>
+                              Approve
+                            </button>
+                          )}
                           <button
                             className="secondary"
                             disabled={busy}
@@ -222,7 +252,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
                       </li>
                     ))}
                   </ul>
-                  <div>
+                  <div hidden={!mySite}>
                     <button
                       className="link danger"
                       disabled={busy}
@@ -243,11 +273,15 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
 
       {me && (
         <div className="card">
-          <h2>Up for swap</h2>
+          <div className="card-head">
+            <h2>Up for swap</h2>
+            <SiteScope otherSites={otherSites} setOtherSites={setOtherSites} />
+          </div>
           <p className="small muted">
-            Only swaps you could actually do: their shift for one of yours at the same site, on a day or night they can work,
-            with both of you passing the rules afterwards (your roster-app roster counts). It's always one for one, so nobody's
-            shifts in the fortnight go down. An officer approves every swap.
+            Only swaps you could actually do: their shift for one of yours on a day or night they can work, with both of you
+            passing the rules afterwards (your roster-app roster counts). Same site only, unless you tick <strong>Look across
+            sites</strong>: then one of yours at another site they've said they'd go to. It's always one for one, so nobody's shifts in the fortnight
+            go down. The officers approve every swap: both sites' for a swap across sites.
           </p>
           {marketShown.length === 0 && <p className="muted">Nothing up for swap that you could do.</p>}
           <ul className="rows">
@@ -280,6 +314,8 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
         <MyShifts
           shifts={myShifts}
           swapsFor={swapsFor}
+          otherSites={otherSites}
+          setOtherSites={setOtherSites}
           today={today}
           offers={offers}
           name={name}
@@ -331,7 +367,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
 
 // My shifts: every shift I work, as a list or a calendar (tap a day for
 // its shifts). Each can be listed for swap or withdrawn.
-function MyShifts({ shifts, swapsFor, today, offers, name, notices, ShiftText, hues, listing, setListing, busy, rpc }) {
+function MyShifts({ shifts, swapsFor, otherSites, setOtherSites, today, offers, name, notices, ShiftText, hues, listing, setListing, busy, rpc }) {
   const [view, setView] = useState(savedView);
   const [day, setDay] = useState(null);
   const choose = (v) => {
@@ -347,6 +383,8 @@ function MyShifts({ shifts, swapsFor, today, offers, name, notices, ShiftText, h
       key={item.key}
       item={item}
       swaps={swapsFor(item.key)}
+      otherSites={otherSites}
+      setOtherSites={setOtherSites}
       offers={offers}
       name={name}
       notices={notices}
@@ -466,7 +504,7 @@ function ShiftCalendar({ shifts, today, hues, day, setDay }) {
 }
 
 // One of my shifts: up for swap (offers so far, withdraw), or list it.
-function MyShiftRow({ item, swaps, offers, name, notices, ShiftText, style, listing, setListing, busy, rpc }) {
+function MyShiftRow({ item, swaps, otherSites, setOtherSites, offers, name, notices, ShiftText, style, listing, setListing, busy, rpc }) {
   const [finding, setFinding] = useState(false);
   const l = item.listing;
   const pending = l ? offers.filter((o) => o.listing_id === l.listing_id && o.status === 'pending') : [];
@@ -527,7 +565,17 @@ function MyShiftRow({ item, swaps, offers, name, notices, ShiftText, style, list
             <button className="secondary" onClick={() => setListing(item.key)}>List for swap</button>
           </div>
           {finding && (
-            <FoundSwaps item={item} swaps={swaps} name={name} notices={notices} ShiftText={ShiftText} busy={busy} rpc={rpc} />
+            <FoundSwaps
+              item={item}
+              swaps={swaps}
+              otherSites={otherSites}
+              setOtherSites={setOtherSites}
+              name={name}
+              notices={notices}
+              ShiftText={ShiftText}
+              busy={busy}
+              rpc={rpc}
+            />
           )}
         </>
       )}
@@ -591,18 +639,39 @@ function MarketRow({ listing: l, notice: n, row, already, lister, notices, Shift
   );
 }
 
+// A swap across sites, for the officers: which sites have approved.
+function CrossSiteStatus({ offer: o, notice: n, offered, siteName }) {
+  if (!offered || offered.site_id === n.site_id) return null;
+  const sides = [
+    [n.site_id, o.listing_site_approved_by],
+    [offered.site_id, o.offered_site_approved_by],
+  ];
+  return (
+    <div className="small muted">
+      Across sites, so both approve:{' '}
+      {sides.map(([siteId, by]) => `${siteName(siteId)} ${by ? 'approved' : 'waiting'}`).join(', ')}
+    </div>
+  );
+}
+
 // Find a swap: shifts already up for swap that this shift of mine can be
 // traded for straight away (on one of their days, both passing the rules).
-function FoundSwaps({ item, swaps, name, notices, ShiftText, busy, rpc }) {
+function FoundSwaps({ item, swaps, otherSites, setOtherSites, name, notices, ShiftText, busy, rpc }) {
+  const scope = <SiteScope otherSites={otherSites} setOtherSites={setOtherSites} />;
   if (swaps.length === 0) {
     return (
-      <p className="small muted">
-        Nothing up for swap fits this shift yet. List it for swap, and doctors who could swap with you will be told.
-      </p>
+      <div className="stack small">
+        {scope}
+        <p className="muted">
+          Nothing up for swap fits this shift yet{otherSites ? '' : ' at this site'}. List it for swap, and doctors who could
+          swap with you will be told.
+        </p>
+      </div>
     );
   }
   return (
     <div className="stack small">
+      {scope}
       <div>Up for swap now, and you could give this shift in return:</div>
       <ul className="rows">
         {swaps.map((l) => (
@@ -642,6 +711,7 @@ function ListForm({ date, busy, onCancel, onSubmit }) {
   const [disruption, setDisruption] = useState(false);
   const [slots, setSlots] = useState([]);
   const [note, setNote] = useState('');
+  const [otherSites, setOtherSites] = useState(false);
   const days = fortnightDays(date);
   const toggle = (slot) => setSlots((s) => (s.includes(slot) ? s.filter((x) => x !== slot) : [...s, slot]));
 
@@ -650,7 +720,7 @@ function ListForm({ date, busy, onCancel, onSubmit }) {
       className="stack small"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit({ p_service_disruption: disruption, p_slots: slots.sort(), p_note: note });
+        onSubmit({ p_service_disruption: disruption, p_slots: slots.sort(), p_note: note, p_other_sites: otherSites });
       }}
     >
       <label className="check">
@@ -671,6 +741,10 @@ function ListForm({ date, busy, onCancel, onSubmit }) {
           ))}
         </div>
       </div>
+      <label className="check">
+        <input type="checkbox" checked={otherSites} onChange={(e) => setOtherSites(e.target.checked)} />
+        I'd take a shift in return at another site I'd work at (not just this one)
+      </label>
       <label>
         Note (optional)
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Family wedding" />
