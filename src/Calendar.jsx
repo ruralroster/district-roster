@@ -32,6 +32,10 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   const [viewChoice, setView] = useState(null);
   const view = !me ? 'officer' : !isOfficer ? 'doctor' : viewChoice ?? 'officer';
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()));
+  // Shifts for me: every site you'd work at (DR Roster's point), or untick
+  // Look across sites for your home site's only. On each time.
+  const [acrossSites, setAcrossSites] = useState(true);
+  const homeSiteId = me?.home_site_id ?? null;
   const [selectedDate, setSelectedDate] = useState(null);
   const [notices, setNotices] = useState([]);
   // Doctors see their own; officers their sites' (RLS).
@@ -130,13 +134,15 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
 
   // The notices this view is about: officers see their own sites'; doctors
   // see only open ones they can do (skills, a site they'd work at, rested,
-  // not marked unavailable), plus anything they've applied for or are
-  // booked on.
+  // not marked unavailable) at their home site, or every site they'd work
+  // at when looking across sites, plus anything they've applied for or
+  // are booked on.
   const canDo = (n) => n.status === 'open' && availability.has(n.notice_id) && !availability.get(n.notice_id).problem;
   const relevant = notices.filter((n) =>
     view === 'officer'
       ? officerSiteIds.has(n.site_id)
-      : (canDo(n) && !!availability.get(n.notice_id)?.interested) ||
+      : (canDo(n) && !!availability.get(n.notice_id)?.interested
+         && (acrossSites || !homeSiteId || n.site_id === homeSiteId)) ||
         (me && n.filled_by_doctor_id === me.doctor_id) ||
         !!myApplication(n.notice_id),
   );
@@ -194,6 +200,14 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
           <button className={view === 'officer' ? 'active' : ''} onClick={() => setView('officer')}>My sites</button>
           <button className={view === 'doctor' ? 'active' : ''} onClick={() => setView('doctor')}>Shifts for me</button>
         </div>
+      )}
+
+      {view === 'doctor' && homeSiteId && (
+        <label className="check">
+          <input type="checkbox" checked={acrossSites} onChange={(e) => setAcrossSites(e.target.checked)} />
+          Look across sites
+          {!acrossSites && <span className="small muted">(showing {sites.find((x) => x.site_id === homeSiteId)?.name ?? 'your home site'} only)</span>}
+        </label>
       )}
 
       <div className="cal-card">

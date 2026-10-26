@@ -71,7 +71,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
               <li><strong>10 hours' rest</strong>: it starts at least 10 hours after any shift you're working (roster-app or DR Roster, not on-call), and finishes at least 10 hours before a shift at your home site or on your roster-app roster;</li>
               <li>not on a day that's blocked (next section).</li>
             </ul>
-            <p>Shifts you've applied for or are booked on always show.</p>
+            <p><strong>Look across sites</strong> starts ticked, showing every site you'd work at; untick it to see only your home site's shifts. (Swaps are the other way round: your own site unless you tick it.) Shifts you've applied for or are booked on always show.</p>
           </Section>
           <Section title="Calendar colours">
             <ul>
