@@ -8,9 +8,12 @@
 --        card in the offer's role, working the card's hours (the Planner
 --        fits them into a place, like any booking without one);
 --      - otherwise: their name goes in a free visitor (or staff-or-visitor)
---        place for that role on the card's job;
---      - no place for them: nothing is added and the shift's notes say to
---        add them by hand, and why.
+--        place for that role on the card's job, or, with none free, on the
+--        card as a visitor with no place of their own (roster-app's
+--        2026-10-28_card_visitors_without_place.sql), which the Planner
+--        fits into an empty place for the role or shows as an extra;
+--      - only if roster-app refuses (or the card's gone) do the notes say
+--        to add them by hand, and why.
 --    The outcome is added to the shift's notes ("On the roster-app card").
 --    The roster-app offer is removed at the same time. If the shift is
 --    reopened, cancelled or given to someone else, the booking comes off
@@ -24,7 +27,8 @@
 --    the card. As with escalated shifts, if the gap is then covered or
 --    withdrawn on roster-app, the district shift is cancelled.
 --
--- Run after 2026-10-28c_escalation.sql. Safe to re-run.
+-- Run after 2026-10-28c_escalation.sql and roster-app's
+-- 2026-10-28_card_visitors_without_place.sql. Safe to re-run.
 
 BEGIN;
 
@@ -113,19 +117,15 @@ BEGIN
         WHERE v.theatre_activity_id = v_card.theatre_activity_id AND v.place_id = p.place_id AND v.slot = s.slot)
     ORDER BY (p.kind = 'visitor'), p.sort_order, s.slot
     LIMIT 1;
-    IF v_place_id IS NOT NULL THEN
-      INSERT INTO theatre_activity_visitors (department_id, theatre_activity_id, place_id, slot, name)
-      VALUES (v_card.department_id, v_card.theatre_activity_id, v_place_id, v_slot, v_doc.name)
-      RETURNING visitor_id INTO v_id;
-      UPDATE district_escalations SET visitor_id = v_id WHERE notice_id = p_notice_id;
-      DELETE FROM volunteer_offers WHERE volunteer_offer_id = v_esc.volunteer_offer_id;
-      RETURN 'On the roster-app card as a visitor';
-    END IF;
-
+    -- None free (or the card isn't a job): a visitor with no place of
+    -- their own, which the Planner fits into an empty place for the role.
+    -- The officer approved them for it, so they can do it.
+    INSERT INTO theatre_activity_visitors (department_id, theatre_activity_id, place_id, slot, name, role, source)
+    VALUES (v_card.department_id, v_card.theatre_activity_id, v_place_id, coalesce(v_slot, 0), v_doc.name, v_esc.role, 'dr_roster')
+    RETURNING visitor_id INTO v_id;
+    UPDATE district_escalations SET visitor_id = v_id WHERE notice_id = p_notice_id;
     DELETE FROM volunteer_offers WHERE volunteer_offer_id = v_esc.volunteer_offer_id;
-    RETURN format('Add %s to the roster-app card by hand (%s)', v_doc.name,
-      CASE WHEN v_staff_id IS NOT NULL THEN 'no roster-app shift matches the card''s hours'
-           ELSE 'they aren''t staff there and the card has no free visitor place' END);
+    RETURN 'On the roster-app card as a visitor';
   EXCEPTION WHEN OTHERS THEN
     -- Never stop the approval because roster-app said no.
     RETURN format('Add %s to the roster-app card by hand (%s)', v_doc.name, SQLERRM);
