@@ -92,7 +92,7 @@ function SiteRow({ site, officers, pending, departments, run }) {
   }
 
   function remove() {
-    if (window.confirm(`Delete ${site.name}? Doctors with it as their home site will have no home site.`)) {
+    if (window.confirm(`Delete ${site.name} from DR Roster? Its district shifts, applications, swaps, shift types and officers here go too, and doctors with it as their home site will have no home site. Roster-app isn't touched. To only disconnect it from roster-app, choose "Not on roster-app" instead.`)) {
       run(supabase.from('sites').delete().eq('site_id', site.site_id));
     }
   }

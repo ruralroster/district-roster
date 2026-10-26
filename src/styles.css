@@ -221,3 +221,6 @@ button.danger { color: var(--danger); }
 .my-cal-bar { height: 6px; border-radius: 3px; background: hsl(var(--site-hue, 210) 60% 50%); }
 .my-cal-bar.swap { background: repeating-linear-gradient(45deg, hsl(var(--site-hue, 210) 60% 50%) 0 4px, #f59e0b 4px 8px); }
 .day-heading { font-size: 1rem; margin: 12px 0 0; }
+.my-cal-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.my-cal-nav .cal-nav { color: var(--text); }
+.my-cal-nav .cal-nav:disabled { opacity: 0.3; }

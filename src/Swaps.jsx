@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from './supabase';
 import { formatShiftTime, toLocalDateStr } from './dateUtils';
 import { siteHues, siteStyle } from './siteColours';
@@ -387,41 +388,68 @@ function MyShifts({ shifts, today, offers, name, notices, ShiftText, hues, listi
   );
 }
 
-// Weeks from this Monday to the last shift's, each day with a bar per
-// shift in its site's colour (striped amber when it's up for swap).
+// Four weeks at a time from this Monday, moved with the arrows or a
+// swipe, as far as the last shift. Each day has a bar per shift in its
+// site's colour (striped amber when it's up for swap).
+const CAL_WEEKS = 4;
 function ShiftCalendar({ shifts, today, hues, day, setDay }) {
+  const [page, setPage] = useState(0);
+  const touchX = useRef(null);
   const monday = addDays(today, -((new Date(`${today}T00:00:00`).getDay() + 6) % 7));
   const last = shifts[shifts.length - 1].shift.shift_date;
-  const weeks = Math.max(4, Math.floor((new Date(`${last}T00:00:00`) - new Date(`${monday}T00:00:00`)) / (7 * 86400000)) + 1);
-  const days = Array.from({ length: weeks * 7 }, (_, i) => addDays(monday, i));
+  const totalWeeks = Math.floor((new Date(`${last}T00:00:00`) - new Date(`${monday}T00:00:00`)) / (7 * 86400000)) + 1;
+  const lastPage = Math.max(0, Math.ceil(totalWeeks / CAL_WEEKS) - 1);
+  const shown = Math.min(page, lastPage);
+  const first = addDays(monday, shown * CAL_WEEKS * 7);
+  const days = Array.from({ length: CAL_WEEKS * 7 }, (_, i) => addDays(first, i));
+  const go = (n) => setPage(Math.max(0, Math.min(lastPage, shown + n)));
+  const range = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 
   return (
-    <div className="my-cal">
-      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <div key={d} className="my-cal-head">{d}</div>)}
-      {days.map((d) => {
-        const onDay = shifts.filter((i) => i.shift.shift_date === d);
-        const date = new Date(`${d}T00:00:00`);
-        const classes = ['my-cal-day', d < today && 'past', d === today && 'today', d === day && 'selected'].filter(Boolean).join(' ');
-        return (
-          <button
-            key={d}
-            type="button"
-            className={classes}
-            onClick={() => setDay(d === day ? null : d)}
-            aria-label={`${dayLabel(d)}: ${onDay.length} shift${onDay.length === 1 ? '' : 's'}`}
-          >
-            <span>
-              {date.getDate()}
-              {(date.getDate() === 1 || d === days[0]) && (
-                <span className="my-cal-month"> {date.toLocaleDateString('en-AU', { month: 'short' })}</span>
-              )}
-            </span>
-            {onDay.map((i) => (
-              <span key={i.key} className={`my-cal-bar${i.listing ? ' swap' : ''}`} style={siteStyle(hues, i.shift.site_id)} />
-            ))}
-          </button>
-        );
-      })}
+    <div
+      onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
+      onTouchEnd={(e) => {
+        const dx = e.changedTouches[0].clientX - (touchX.current ?? e.changedTouches[0].clientX);
+        if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+        touchX.current = null;
+      }}
+    >
+      <div className="my-cal-nav">
+        <button type="button" className="cal-nav" onClick={() => go(-1)} disabled={shown === 0} aria-label="Earlier weeks">
+          <ChevronLeft size={20} />
+        </button>
+        <span className="small">{range(days[0])} – {range(days[days.length - 1])}</span>
+        <button type="button" className="cal-nav" onClick={() => go(1)} disabled={shown === lastPage} aria-label="Later weeks">
+          <ChevronRight size={20} />
+        </button>
+      </div>
+      <div className="my-cal">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <div key={d} className="my-cal-head">{d}</div>)}
+        {days.map((d) => {
+          const onDay = shifts.filter((i) => i.shift.shift_date === d);
+          const date = new Date(`${d}T00:00:00`);
+          const classes = ['my-cal-day', d < today && 'past', d === today && 'today', d === day && 'selected'].filter(Boolean).join(' ');
+          return (
+            <button
+              key={d}
+              type="button"
+              className={classes}
+              onClick={() => setDay(d === day ? null : d)}
+              aria-label={`${dayLabel(d)}: ${onDay.length} shift${onDay.length === 1 ? '' : 's'}`}
+            >
+              <span>
+                {date.getDate()}
+                {(date.getDate() === 1 || d === days[0]) && (
+                  <span className="my-cal-month"> {date.toLocaleDateString('en-AU', { month: 'short' })}</span>
+                )}
+              </span>
+              {onDay.map((i) => (
+                <span key={i.key} className={`my-cal-bar${i.listing ? ' swap' : ''}`} style={siteStyle(hues, i.shift.site_id)} />
+              ))}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
