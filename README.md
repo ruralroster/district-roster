@@ -14,6 +14,13 @@ Live: https://ruralroster.github.io/district-roster/
 
 ## Who can do what
 
-- **Super admin** (`profiles.is_super_admin`): creates districts and sites, links sites to roster-app departments, adds site officers.
-- **Site officer**: officers of the linked roster-app department, plus anyone added to the site. Invites, edits and deactivates the district's doctors.
-- **District doctor**: sees their district's sites and doctors and edits their own profile (home site, skills, contact, notifications).
+- **Super admin** (`profiles.is_super_admin`): creates districts and sites, links sites to roster-app departments, adds site officers, imports from v3 (Admin tab). Sees every district.
+- **Site officer**: officers of the linked roster-app department, plus anyone added to the site. Posts shifts (one at a time, by pasting a message, or from a spreadsheet), approves or declines applicants, fills, reopens and cancels shifts, manages the site's shift types and keep-local hours (Sites tab), and invites doctors and sets their levels (Doctors tab).
+- **District doctor**: sees open shifts they can do (their sites, level, skills, the 10-hour rest rule, blocked days), applies and withdraws, marks days unavailable, and edits their own profile (level, skills, sites, home site, contact, notifications).
+
+The in-app **Help** tab (`src/Help.jsx`) explains all of this to users; keep it in step when a feature changes.
+
+## How it ties in with roster-app
+
+- roster-app volunteering offers at a linked site that nobody local takes are escalated to DR Roster after the site's keep-local hours (`district_escalate_offers`, every 15 minutes). An approved district doctor is booked onto the roster-app card (staff booking, or a visitor marked From DR Roster).
+- A doctor's roster-app shifts count for the rest rules, and a roster-app "working elsewhere" day blocks the whole day. Plain unavailable days and leave don't.

@@ -5,6 +5,7 @@ import SetPassword from './SetPassword';
 import Profile from './Profile';
 import Doctors from './Doctors';
 import Sites from './Sites';
+import Help from './Help';
 import Admin from './Admin';
 import Notifications from './Notifications';
 import Calendar from './Calendar';
@@ -97,6 +98,7 @@ function Home({ user }) {
     isOfficer && ['doctors', 'Doctors'],
     officerSiteIds.size > 0 && ['sites', 'Sites'],
     isSuperAdmin && ['admin', 'Admin'],
+    ['help', 'Help'],
   ].filter(Boolean);
   const activeTab = tabs.some(([k]) => k === tab) ? tab : tabs[0]?.[0];
   const district = districts.find((d) => d.district_id === districtId);
@@ -121,7 +123,7 @@ function Home({ user }) {
       {error && <p className="error">{error}</p>}
       {loading && <p>Loading…</p>}
 
-      {!loading && tabs.length === 0 && (
+      {!loading && tabs.length === 1 && (
         <p className="card">
           You're signed in as {user.email}, but you're not in a district yet. Ask your rostering officer to
           invite you.
@@ -155,6 +157,7 @@ function Home({ user }) {
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}
       {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} officerSiteIds={officerSiteIds} onChanged={reload} />}
       {activeTab === 'admin' && <Admin districts={districts} onChanged={reload} />}
+      {activeTab === 'help' && <Help isDoctor={!!me} isOfficer={officerSiteIds.size > 0} isSuperAdmin={isSuperAdmin} />}
     </div>
   );
 }
