@@ -128,6 +128,14 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
   const openListing = (noticeId) => listings.find((l) => l.notice_id === noticeId && l.status === 'open');
   const myOffers = me ? offers.filter((o) => o.doctor_id === me.doctor_id) : [];
   const marketShown = market.filter((m) => m.swap_options?.length);
+  // Find a swap: listings up for swap where this shift of mine (key 'n:…'
+  // or 'a:…', as in My shifts) is a valid trade, not already offered.
+  const swapsFor = (key) =>
+    marketShown
+      .filter((m) => m.swap_options.some((o) => (o.notice_id ? `n:${o.notice_id}` : `a:${o.assignment_id}`) === key))
+      .filter((m) => !myOffers.some((o) => o.listing_id === m.listing_id && o.status === 'pending'))
+      .map((m) => listings.find((l) => l.listing_id === m.listing_id))
+      .filter((l) => l && notices.get(l.notice_id));
   // Every shift I work: DR Roster bookings, and roster-app shifts at the
   // district's sites (my primary site's roster included). A DR Roster
   // booking that's also on a roster-app card shows once, as the DR one.
@@ -271,6 +279,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
       {me && (
         <MyShifts
           shifts={myShifts}
+          swapsFor={swapsFor}
           today={today}
           offers={offers}
           name={name}
@@ -322,7 +331,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
 
 // My shifts: every shift I work, as a list or a calendar (tap a day for
 // its shifts). Each can be listed for swap or withdrawn.
-function MyShifts({ shifts, today, offers, name, notices, ShiftText, hues, listing, setListing, busy, rpc }) {
+function MyShifts({ shifts, swapsFor, today, offers, name, notices, ShiftText, hues, listing, setListing, busy, rpc }) {
   const [view, setView] = useState(savedView);
   const [day, setDay] = useState(null);
   const choose = (v) => {
@@ -337,6 +346,7 @@ function MyShifts({ shifts, today, offers, name, notices, ShiftText, hues, listi
     <MyShiftRow
       key={item.key}
       item={item}
+      swaps={swapsFor(item.key)}
       offers={offers}
       name={name}
       notices={notices}
@@ -456,7 +466,8 @@ function ShiftCalendar({ shifts, today, hues, day, setDay }) {
 }
 
 // One of my shifts: up for swap (offers so far, withdraw), or list it.
-function MyShiftRow({ item, offers, name, notices, ShiftText, style, listing, setListing, busy, rpc }) {
+function MyShiftRow({ item, swaps, offers, name, notices, ShiftText, style, listing, setListing, busy, rpc }) {
+  const [finding, setFinding] = useState(false);
   const l = item.listing;
   const pending = l ? offers.filter((o) => o.listing_id === l.listing_id && o.status === 'pending') : [];
   return (
@@ -508,9 +519,17 @@ function MyShiftRow({ item, offers, name, notices, ShiftText, style, listing, se
           }}
         />
       ) : (
-        <div>
-          <button className="secondary" onClick={() => setListing(item.key)}>List for swap</button>
-        </div>
+        <>
+          <div className="inline">
+            <button className="secondary" onClick={() => setFinding(!finding)}>
+              Find a swap{swaps.length > 0 ? ` (${swaps.length})` : ''}
+            </button>
+            <button className="secondary" onClick={() => setListing(item.key)}>List for swap</button>
+          </div>
+          {finding && (
+            <FoundSwaps item={item} swaps={swaps} name={name} notices={notices} ShiftText={ShiftText} busy={busy} rpc={rpc} />
+          )}
+        </>
       )}
     </li>
   );
@@ -569,6 +588,50 @@ function MarketRow({ listing: l, notice: n, row, already, lister, notices, Shift
         </div>
       )}
     </li>
+  );
+}
+
+// Find a swap: shifts already up for swap that this shift of mine can be
+// traded for straight away (on one of their days, both passing the rules).
+function FoundSwaps({ item, swaps, name, notices, ShiftText, busy, rpc }) {
+  if (swaps.length === 0) {
+    return (
+      <p className="small muted">
+        Nothing up for swap fits this shift yet. List it for swap, and doctors who could swap with you will be told.
+      </p>
+    );
+  }
+  return (
+    <div className="stack small">
+      <div>Up for swap now, and you could give this shift in return:</div>
+      <ul className="rows">
+        {swaps.map((l) => (
+          <li key={l.listing_id} className="row">
+            <span>
+              {name(l.doctor_id)}'s <ShiftText notice={notices.get(l.notice_id)} />
+              {l.service_disruption && <span className="badge danger-badge">Service disruption</span>}
+              {l.note && <span className="muted"> "{l.note}"</span>}
+            </span>
+            <button
+              disabled={busy}
+              onClick={() => {
+                const note = window.prompt(`Offer this shift to ${name(l.doctor_id)} for theirs? Add a note for the officer if you like.`, '');
+                if (note !== null) {
+                  rpc('offer_for_swap', {
+                    p_listing_id: l.listing_id,
+                    p_offered_notice_id: item.noticeId ?? null,
+                    p_offered_assignment_id: item.assignmentId ?? null,
+                    p_note: note,
+                  }, 'Swap offered. An officer will approve or decline it.');
+                }
+              }}
+            >
+              Offer swap
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
