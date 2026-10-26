@@ -4,9 +4,13 @@
 // x-cron-secret header (see migrations/2026-10-27b_notify_rules.sql). Each
 // run sends whatever's waiting, one email and one push per person; a run
 // with nothing new sends nothing:
-//   - new open shifts, to doctors who'd work at that site, whose skills
-//     fit, who aren't marked unavailable and are rested (10 hours either
-//     side; the rules are in SQL: district_notice_recipients)
+//   - a shift posted on DR Roster, once, straight away, to doctors who'd
+//     work at that site, at or above its level, whose skills fit, who
+//     aren't marked unavailable and are rested (10 hours either side; the
+//     rules are in SQL: district_notice_recipients). One escalated from
+//     roster-app isn't sent on its own: it waits for the Monday summary.
+//   - Mondays from 9:00, each doctor's summary: every open shift they can
+//     do (same rules) at the sites they'd work at, for the next 6 weeks
 //   - applications and withdrawals, to the site's officers (its
 //     site_officers, plus roster-app officers of a linked department)
 //   - approved / declined / booking cancelled, to the doctor
@@ -129,6 +133,8 @@ async function tell(admin, person, { subject, intro, lines, pushTitle, tag }) {
 
 // ---------------------------------------------------------------------------
 
+// Shifts posted on DR Roster since the last run. Escalated ones
+// (source 'roster_app') are marked too but left for the Monday summary.
 async function newShifts(admin) {
   const { data: claimed, error } = await admin
     .from('district_notices')
@@ -138,7 +144,7 @@ async function newShifts(admin) {
   if (error) throw error;
   const today = brisbaneToday();
   const notices = (claimed ?? [])
-    .filter((n) => n.status === 'open' && n.shift_date >= today)
+    .filter((n) => n.status === 'open' && n.source !== 'roster_app' && n.shift_date >= today)
     .sort((a, b) => a.shift_date.localeCompare(b.shift_date) || a.start_time.localeCompare(b.start_time));
   if (!notices.length) return 0;
 
@@ -420,6 +426,64 @@ async function digests(admin) {
   return sent;
 }
 
+// Mondays from 9:00: each doctor's summary of every open shift they can
+// do over the next 6 weeks (the same rules as a new shift), leaving out
+// ones they've already applied for. Claimed per doctor
+// (district_doctors.digest_sent_on), so it's sent once.
+async function doctorDigests(admin) {
+  const now = brisbaneNow();
+  if (now.getUTCDay() !== 1 || now.getUTCHours() < 9) return 0;
+  const today = brisbaneToday();
+
+  const { data: doctors, error } = await admin
+    .from('district_doctors')
+    .update({ digest_sent_on: today })
+    .eq('active', true)
+    .not('user_id', 'is', null)
+    .or(`digest_sent_on.is.null,digest_sent_on.neq.${today}`)
+    .select('doctor_id, user_id, email, name, notify_email, notify_push');
+  if (error) throw error;
+  if (!doctors?.length) return 0;
+
+  const { data: open } = await admin
+    .from('district_notices')
+    .select('*, sites(name)')
+    .eq('status', 'open')
+    .gte('shift_date', today)
+    .lte('shift_date', addDays(today, 42))
+    .order('shift_date')
+    .order('start_time');
+  const notices = (open ?? []).filter((n) => startsAt(n) > Date.now());
+  if (!notices.length) return 0;
+
+  const { data: pairs, error: pairsError } = await admin.rpc('district_notice_recipients', {
+    p_notice_ids: notices.map((n) => n.notice_id),
+  });
+  if (pairsError) throw pairsError;
+  const { data: applied } = await admin
+    .from('district_applications')
+    .select('doctor_id, notice_id')
+    .in('status', ['pending', 'approved'])
+    .in('notice_id', notices.map((n) => n.notice_id));
+  const appliedFor = new Set((applied ?? []).map((a) => `${a.doctor_id}:${a.notice_id}`));
+
+  let sent = 0;
+  for (const d of doctors) {
+    const mine = new Set((pairs ?? []).filter((p) => p.doctor_id === d.doctor_id).map((p) => p.notice_id));
+    const fits = notices.filter((n) => mine.has(n.notice_id) && !appliedFor.has(`${d.doctor_id}:${n.notice_id}`));
+    if (!fits.length) continue;
+    await tell(admin, { email: d.email, userId: d.user_id, wantsEmail: d.notify_email, wantsPush: d.notify_push }, {
+      subject: `This week: ${plural(fits.length, 'district shift')} you can do`,
+      intro: `Hi ${d.name.split(' ')[0]}, here are the open shifts over the next 6 weeks at the sites you'd work at that you can do. Apply on the Calendar.`,
+      lines: fits.map(shiftLine),
+      pushTitle: `${plural(fits.length, 'district shift')} you can do`,
+      tag: 'doctor-digest',
+    });
+    sent++;
+  }
+  return sent;
+}
+
 async function sendTest(admin, token: string) {
   const { data: { user } } = await admin.auth.getUser(token);
   if (!user) return json({ error: 'Not signed in' }, 401);
@@ -449,10 +513,11 @@ Deno.serve(async (req) => {
     const swaps = await swapNews(admin);
     const urgent = await urgentShifts(admin);
     const digest = await digests(admin);
+    const doctorDigest = await doctorDigests(admin);
     return json({
       data: {
         doctorsToldOfNewShifts: shifts, officersTold: officers, doctorsToldOfDecisions: doctors, toldOfSwaps: swaps,
-        officersToldOfUrgent: urgent, digestsSent: digest,
+        officersToldOfUrgent: urgent, digestsSent: digest, doctorSummariesSent: doctorDigest,
       },
     });
   } catch (err) {

@@ -42,7 +42,9 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
         <Section title="Notifications">
           <ul>
             <li>You get emails, and phone notifications on any device you turn them on for under <strong>Notifications on this device</strong>. <strong>Send me a test</strong> checks it's working.</li>
-            <li>DR Roster checks for news every 30 minutes from 6:00 to 21:00, so nothing arrives overnight.</li>
+            <li>DR Roster checks for news every 30 minutes from 6:00 to 21:00, so nothing arrives overnight. Each thing is only sent once.</li>
+            <li><strong>New shifts</strong>: a shift posted on DR Roster is sent once, straight away, to the doctors who can do it at the sites they'd work at. Shifts passed on from a roster-app card nobody locally took aren't sent one by one.</li>
+            <li><strong>Monday summary</strong>: every Monday at 9:00, doctors get one email listing all the open shifts over the next 6 weeks they can do at the sites they'd work at (not ones they've already applied for). Nothing is sent if there aren't any.</li>
             <li>Email and phone notifications can each be turned off in your profile.</li>
           </ul>
         </Section>

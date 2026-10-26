@@ -9,12 +9,18 @@
 --      by default), one email and push listing their sites' open district
 --      shifts for the next 6 weeks, "locum might be required" ones first,
 --      plus swaps waiting for them. Sent by district-notify from 7:00.
+--   4. Doctors: a shift posted on DR Roster is still sent straight away to
+--      the doctors who could do it, but one escalated from roster-app
+--      (source 'roster_app') isn't: it goes in their Monday 9:00 summary of
+--      every open shift they can do at the sites they'd work at
+--      (district_doctors.digest_sent_on stops a second one that day).
 --
 -- Run after 2026-10-31_swaps.sql. Safe to re-run.
 
 BEGIN;
 
 ALTER TABLE district_notices ADD COLUMN IF NOT EXISTS urgent_notified_at timestamptz;
+ALTER TABLE district_doctors ADD COLUMN IF NOT EXISTS digest_sent_on date;
 
 -- An officer's digest days: 0 = Monday … 6 = Sunday. No row = Monday.
 CREATE TABLE IF NOT EXISTS district_officer_settings (
