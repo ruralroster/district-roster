@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, SKILLS } from './supabase';
 import { formatShiftTime } from './dateUtils';
+import { siteHues, siteStyle } from './siteColours';
 
 const skillText = (skill) => (skill === 'Emergency' ? 'Any doctor' : `Needs ${skill}`);
 
@@ -36,6 +37,7 @@ export default function Sites({ districtId, sites, officerSiteIds, onChanged }) 
     return !error;
   }
 
+  const hues = siteHues(sites);
   return (
     <div className="card">
       <h2>Sites</h2>
@@ -50,9 +52,9 @@ export default function Sites({ districtId, sites, officerSiteIds, onChanged }) 
           const types = shiftTypes.filter((t) => t.site_id === s.site_id);
           const canEdit = officerSiteIds.has(s.site_id);
           return (
-            <li key={s.site_id} className="row column">
+            <li key={s.site_id} className="row column site-stripe" style={siteStyle(hues, s.site_id)}>
               <div>
-                <strong>{s.name}</strong>
+                <strong className="site-name">{s.name}</strong>
                 {s.department_id && <span className="badge">On roster-app</span>}
                 <div className="muted small">
                   {names.length > 0 ? `Officers: ${names.join(', ')}` : 'No officer yet'}

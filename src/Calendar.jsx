@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase, SKILLS, POSITIONS, POSITION_LABEL, LEVEL_LABEL } from './supabase';
 import { getMondayOfWeek, toLocalDateStr, isSameDate, formatShiftTime } from './dateUtils';
 import BulkShifts from './BulkShifts';
+import { siteHues, siteStyle } from './siteColours';
 
 // Same look as roster-app's officer Calendar tab: 4 weeks of square day
 // tiles, coloured by status, with a legend.
@@ -141,6 +142,18 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
     return { status: canCount > 0 ? 'available' : 'none', count: canCount };
   }
 
+  // The sites with shifts to show on a day, for its coloured dots: open
+  // ones at an officer's sites, ones a doctor can do (or has) otherwise.
+  const hues = siteHues(sites);
+  const daySites = (dateStr) => [
+    ...new Set(
+      relevant
+        .filter((n) => n.shift_date === dateStr && (view === 'officer' ? n.status === 'open' : true))
+        .map((n) => n.site_id),
+    ),
+  ];
+  const keySites = sites.filter((s) => relevant.some((n) => n.site_id === s.site_id));
+
   const today = new Date();
   const styles = STATUS_STYLES[view];
   const shiftWeeks = (n) => {
@@ -199,6 +212,11 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
                   )}
                   {date.getDate()}
                   {count > 0 && <span className="cal-count">{count}</span>}
+                  <span className="cal-dots">
+                    {daySites(dateStr).slice(0, 6).map((id) => (
+                      <span key={id} className="site-dot" style={siteStyle(hues, id)} />
+                    ))}
+                  </span>
                 </button>
               );
             })}
@@ -217,6 +235,16 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
             Open shifts that day
           </div>
         </div>
+        {keySites.length > 1 && (
+          <div className="site-key">
+            {keySites.map((s) => (
+              <span key={s.site_id}>
+                <span className="site-dot" style={siteStyle(hues, s.site_id)} />
+                {s.name}
+              </span>
+            ))}
+          </div>
+        )}
         {error && <p className="error">{error}</p>}
       </div>
 
@@ -253,6 +281,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
 
 function DayPanel({ date, notices, applications, availability, unavailable, view, sites, doctors, me, onChanged }) {
   const [error, setError] = useState('');
+  const hues = siteHues(sites);
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
   const doctorName = (id) => doctors.find((d) => d.doctor_id === id)?.name ?? (id === me?.doctor_id ? 'You' : 'A district doctor');
 
@@ -287,9 +316,9 @@ function DayPanel({ date, notices, applications, availability, unavailable, view
       {notices.length === 0 && <p className="muted">{view === 'officer' ? 'No district shifts at your sites.' : 'No shifts for you.'}</p>}
       <ul className="rows">
         {notices.map((n) => (
-          <li key={n.notice_id} className="row">
+          <li key={n.notice_id} className="row site-stripe" style={siteStyle(hues, n.site_id)}>
             <div>
-              <strong>{siteName(n.site_id)}</strong> {n.title && `${n.title} `}{formatShiftTime(n.start_time, n.end_time)}
+              <strong className="site-name">{siteName(n.site_id)}</strong> {n.title && `${n.title} `}{formatShiftTime(n.start_time, n.end_time)}
               <span className={n.status === 'open' ? 'badge open' : 'badge'}>
                 {n.status === 'open' ? 'Open' : `Filled: ${doctorName(n.filled_by_doctor_id)}`}
               </span>
