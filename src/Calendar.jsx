@@ -297,6 +297,12 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
 }
 
 function DayPanel({ date, notices, applications, availability, unavailable, dayInfo, view, sites, doctors, me, onChanged }) {
+  // Still open less than 3 weeks out: a locum might be needed (step 4).
+  const locumBy = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 21);
+    return toLocalDateStr(d);
+  })();
   const [error, setError] = useState('');
   const hues = siteHues(sites);
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
@@ -339,6 +345,9 @@ function DayPanel({ date, notices, applications, availability, unavailable, dayI
               <span className={n.status === 'open' ? 'badge open' : 'badge'}>
                 {n.status === 'open' ? 'Open' : `Filled: ${doctorName(n.filled_by_doctor_id)}`}
               </span>
+              {view === 'officer' && n.status === 'open' && n.shift_date <= locumBy && (
+                <span className="badge danger-badge">Locum might be required</span>
+              )}
               <div className="muted small">
                 {POSITION_LABEL[n.position] ?? 'Consultant'} · {n.required_skill === 'Emergency' ? 'Any doctor' : `Needs ${n.required_skill}`}
                 {n.notes && ` · ${n.notes}`}

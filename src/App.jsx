@@ -7,6 +7,7 @@ import Doctors from './Doctors';
 import Sites from './Sites';
 import Help from './Help';
 import Swaps from './Swaps';
+import DigestSettings from './DigestSettings';
 import Admin from './Admin';
 import Notifications from './Notifications';
 import Calendar from './Calendar';
@@ -150,9 +151,10 @@ function Home({ user }) {
             userId={user.id}
             intro={[
               me && "You're told about new shifts your skills fit, and when you're booked or not. Choose email and/or phone above.",
-              officerSiteIds.size > 0 && "As an officer, you're emailed and sent a phone notification when someone applies for or withdraws from your sites' shifts.",
+              officerSiteIds.size > 0 && "As an officer, you're emailed and sent a phone notification when someone applies for or withdraws from your sites' shifts, when a swap needs approving, and when a shift is still open with under 72 hours to go.",
             ].filter(Boolean).join(' ')}
           />
+          {officerSiteIds.size > 0 && <DigestSettings userId={user.id} />}
           <TwoFactorSettings />
         </div>
       )}

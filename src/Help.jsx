@@ -153,6 +153,13 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
               <li>If you've already posted the same shift here (same site, date and hours), the roster-app offer is linked to yours instead of posting a second copy.</li>
             </ul>
           </Section>
+          <Section title="Locum might be required, urgent alerts and the weekly digest">
+            <ul>
+              <li>A district shift still open less than 3 weeks before it starts is marked <strong>Locum might be required</strong> on your Calendar.</li>
+              <li>One still open with under 72 hours to go is emailed and pushed to you straight away.</li>
+              <li>The <strong>weekly digest</strong> lists your sites' shifts still open over the next 6 weeks (locum might be required first) and swaps waiting for you. Choose its day(s) under My account; Monday unless you change it. It arrives from 7:00.</li>
+            </ul>
+          </Section>
           <Section title="Sites and doctors">
             <ul>
               <li><strong>Sites</strong>: add and remove each site's shift types, choose its colour, and set how long gaps stay local before coming here.</li>

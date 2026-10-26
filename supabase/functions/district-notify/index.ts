@@ -292,6 +292,134 @@ async function swapNews(admin) {
   return byUser.size;
 }
 
+// Brisbane is UTC+10 all year.
+const brisbaneNow = () => new Date(Date.now() + 10 * 3600 * 1000);
+const addDays = (date: string, n: number) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const startsAt = (n) => Date.parse(`${n.shift_date}T${n.start_time.slice(0, 5)}:00+10:00`);
+
+// Officers of each site: site_id -> [user_id].
+async function officersBySite(admin) {
+  const { data, error } = await admin.rpc('district_site_officer_pairs');
+  if (error) throw error;
+  const bySite = new Map();
+  for (const p of data ?? []) bySite.set(p.site_id, [...(bySite.get(p.site_id) ?? []), p.user_id]);
+  return bySite;
+}
+
+async function emailsFor(admin, userIds: string[]) {
+  if (!userIds.length) return new Map();
+  const { data } = await admin.from('profiles').select('user_id, email').in('user_id', userIds);
+  return new Map((data ?? []).map((p) => [p.user_id, p.email]));
+}
+
+// A shift still open with under 72 hours to go: the site's officers are
+// told at once, once. (Not one posted in the last 6 hours: the officer
+// who posted it knows.)
+async function urgentShifts(admin) {
+  const today = brisbaneToday();
+  const { data, error } = await admin
+    .from('district_notices')
+    .select('*, sites(name)')
+    .eq('status', 'open')
+    .neq('source', 'roster_shift')
+    .is('urgent_notified_at', null)
+    .gte('shift_date', today)
+    .lte('shift_date', addDays(today, 3));
+  if (error) throw error;
+  const now = Date.now();
+  const due = (data ?? []).filter((n) =>
+    startsAt(n) > now && startsAt(n) - now < 72 * 3600 * 1000 && now - Date.parse(n.created_at) > 6 * 3600 * 1000);
+  if (!due.length) return 0;
+  await admin.from('district_notices').update({ urgent_notified_at: new Date().toISOString() }).in('notice_id', due.map((n) => n.notice_id));
+
+  const bySite = await officersBySite(admin);
+  const linesFor = new Map();
+  for (const n of due) {
+    for (const userId of new Set(bySite.get(n.site_id) ?? [])) linesFor.set(userId, [...(linesFor.get(userId) ?? []), shiftLine(n)]);
+  }
+  const emails = await emailsFor(admin, [...linesFor.keys()]);
+  for (const [userId, lines] of linesFor) {
+    await tell(admin, { email: emails.get(userId), userId }, {
+      subject: lines.length === 1 ? `Still unfilled, under 72 hours to go: ${lines[0]}` : `${plural(lines.length, 'shift')} still unfilled, under 72 hours to go`,
+      intro: 'These district shifts at your sites start within 72 hours and nobody has been booked. A locum might be needed.',
+      lines,
+      pushTitle: 'Unfilled shift: under 72 hours to go',
+      tag: 'urgent',
+    });
+  }
+  return linesFor.size;
+}
+
+// The weekly digest, on each officer's chosen day(s) (Monday unless
+// they've changed it), from 7:00: their sites' open shifts for the next 6
+// weeks, "locum might be required" (under 3 weeks away) first, and swaps
+// waiting for them.
+async function digests(admin) {
+  const now = brisbaneNow();
+  if (now.getUTCHours() < 7) return 0;
+  const today = brisbaneToday();
+  const weekday = (now.getUTCDay() + 6) % 7; // 0 = Monday
+
+  const bySite = await officersBySite(admin);
+  const officerIds = [...new Set([...bySite.values()].flat())];
+  if (!officerIds.length) return 0;
+  const { data: settings } = await admin.from('district_officer_settings').select('*').in('user_id', officerIds);
+  const settingsOf = new Map((settings ?? []).map((r) => [r.user_id, r]));
+  const dueToday = officerIds.filter((id) => {
+    const r = settingsOf.get(id);
+    return (r?.digest_days ?? [0]).includes(weekday) && r?.digest_sent_on !== today;
+  });
+  if (!dueToday.length) return 0;
+  // Claim first, so an overlapping run can't send twice.
+  await admin.from('district_officer_settings').upsert(dueToday.map((user_id) => ({ user_id, digest_sent_on: today })), { onConflict: 'user_id' });
+
+  const { data: open } = await admin
+    .from('district_notices')
+    .select('*, sites(name)')
+    .eq('status', 'open')
+    .neq('source', 'roster_shift')
+    .gte('shift_date', today)
+    .lte('shift_date', addDays(today, 42))
+    .order('shift_date')
+    .order('start_time');
+  const { data: offers } = await admin
+    .from('district_swap_offers')
+    .select('offer_id, district_swap_listings!inner(notice_id, district_notices!inner(site_id))')
+    .eq('status', 'pending');
+  const locumBy = addDays(today, 21);
+
+  const emails = await emailsFor(admin, dueToday);
+  let sent = 0;
+  for (const userId of dueToday) {
+    const mySites = new Set([...bySite].filter(([, ids]) => ids.includes(userId)).map(([siteId]) => siteId));
+    const mine = (open ?? []).filter((n) => mySites.has(n.site_id));
+    const swaps = (offers ?? []).filter((o) => mySites.has(o.district_swap_listings?.district_notices?.site_id)).length;
+    if (!mine.length && !swaps) continue;
+    const locum = mine.filter((n) => n.shift_date <= locumBy);
+    const later = mine.filter((n) => n.shift_date > locumBy);
+    const lines = [
+      ...locum.map((n) => `LOCUM MIGHT BE REQUIRED: ${shiftLine(n)}`),
+      ...later.map((n) => `Open: ${shiftLine(n)}`),
+      ...(swaps ? [`${plural(swaps, 'swap')} waiting for your approval on the Swaps tab`] : []),
+    ];
+    await tell(admin, { email: emails.get(userId), userId }, {
+      subject: locum.length
+        ? `Weekly digest: ${plural(locum.length, 'shift')} might need a locum`
+        : `Weekly digest: ${plural(mine.length, 'open shift')} at your sites`,
+      intro: 'Your sites\' district shifts still open over the next 6 weeks. Shifts less than 3 weeks away with nobody booked might need a locum.',
+      lines,
+      pushTitle: locum.length ? `${plural(locum.length, 'shift')} might need a locum` : 'Weekly digest',
+      tag: 'digest',
+    });
+    sent++;
+  }
+  return sent;
+}
+
 async function sendTest(admin, token: string) {
   const { data: { user } } = await admin.auth.getUser(token);
   if (!user) return json({ error: 'Not signed in' }, 401);
@@ -319,7 +447,14 @@ Deno.serve(async (req) => {
     const officers = await officerNews(admin);
     const doctors = await doctorNews(admin);
     const swaps = await swapNews(admin);
-    return json({ data: { doctorsToldOfNewShifts: shifts, officersTold: officers, doctorsToldOfDecisions: doctors, toldOfSwaps: swaps } });
+    const urgent = await urgentShifts(admin);
+    const digest = await digests(admin);
+    return json({
+      data: {
+        doctorsToldOfNewShifts: shifts, officersTold: officers, doctorsToldOfDecisions: doctors, toldOfSwaps: swaps,
+        officersToldOfUrgent: urgent, digestsSent: digest,
+      },
+    });
   } catch (err) {
     console.error('district-notify failed:', err);
     return json({ error: String(err?.message ?? err) }, 500);
