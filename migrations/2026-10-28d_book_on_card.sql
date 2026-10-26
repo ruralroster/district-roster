@@ -27,6 +27,9 @@
 --    the card. As with escalated shifts, if the gap is then covered or
 --    withdrawn on roster-app, the district shift is cancelled.
 --
+-- 3. Approving: the officer is told which skills the card needs for the
+--    role (district_card_skills), and can still approve anyone.
+--
 -- Run after 2026-10-28c_escalation.sql and roster-app's
 -- 2026-10-28_card_visitors_without_place.sql. Safe to re-run.
 
@@ -328,5 +331,59 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION district_escalate_offers() FROM PUBLIC, anon, authenticated;
+
+-- For the officer approving: the advanced skills the roster-app card
+-- needs for the offered role (the card's activity, plus its job's places
+-- for that role — a senior place is a consultant's), and which district
+-- doctors hold one on roster-app (staff in that department). The officer
+-- can still approve someone not on the list.
+CREATE OR REPLACE FUNCTION district_card_skills(p_notice_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_notice district_notices%ROWTYPE;
+  v_esc district_escalations%ROWTYPE;
+  v_card theatre_activities%ROWTYPE;
+  v_ids uuid[];
+BEGIN
+  SELECT * INTO v_notice FROM district_notices WHERE notice_id = p_notice_id;
+  IF NOT FOUND OR NOT is_site_officer(v_notice.site_id) THEN
+    RAISE EXCEPTION 'Only this site''s officers can see this';
+  END IF;
+  SELECT * INTO v_esc FROM district_escalations WHERE notice_id = p_notice_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('skills', '[]'::jsonb, 'holders', '[]'::jsonb);
+  END IF;
+  SELECT * INTO v_card FROM theatre_activities WHERE theatre_activity_id = v_esc.theatre_activity_id;
+
+  SELECT array_agg(DISTINCT id) INTO v_ids
+  FROM (
+    SELECT unnest(act.required_advanced_skills) AS id
+    FROM activity_types act WHERE act.activity_id = v_card.activity_id
+    UNION
+    SELECT unnest(p.required_advanced_skills)
+    FROM job_places p
+    WHERE p.job_type_id = v_card.job_type_id
+      AND (p.grade = 'any' OR (p.grade = 'senior') = (v_esc.role = 'consultant'))
+  ) x;
+
+  RETURN jsonb_build_object(
+    'skills', coalesce((SELECT jsonb_agg(k.name ORDER BY k.name) FROM advanced_skills k WHERE k.advanced_skill_id = ANY (v_ids)), '[]'::jsonb),
+    'holders', coalesce((
+      SELECT jsonb_agg(DISTINCT d.doctor_id)
+      FROM district_doctors d
+      JOIN staff st ON st.user_id = d.user_id AND st.department_id = v_card.department_id AND st.active
+      WHERE d.district_id = v_notice.district_id AND st.advanced_skills && v_ids
+    ), '[]'::jsonb)
+  );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION district_card_skills(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION district_card_skills(uuid) TO authenticated;
 
 COMMIT;

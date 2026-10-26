@@ -402,16 +402,39 @@ function MyApplication({ notice, me, applications, problem, rpc }) {
 // Officer: who's applied for an open shift, to approve or decline.
 function Applicants({ notice, applications, doctors, rpc }) {
   const waiting = applications.filter((a) => a.notice_id === notice.notice_id && a.status === 'pending');
+  // From a roster-app card: the skills it needs for the role, and who's
+  // known to hold one (staff there). Approving someone else asks first.
+  const [cardSkills, setCardSkills] = useState({ skills: [], holders: [] });
+  // Posted shifts can be linked to a roster-app offer too, so always ask.
+  const fromCard = waiting.length > 0;
+  useEffect(() => {
+    if (!fromCard) return;
+    supabase.rpc('district_card_skills', { p_notice_id: notice.notice_id }).then(({ data }) => {
+      if (data) setCardSkills(data);
+    });
+  }, [fromCard, notice.notice_id]);
+
   if (!waiting.length) return <div className="small muted">No applications yet</div>;
   const doctorName = (id) => doctors.find((d) => d.doctor_id === id)?.name ?? 'A doctor';
+  const needs = cardSkills.skills.join(' or ');
+  const holds = (id) => cardSkills.holders.includes(id);
+  function approve(a) {
+    if (needs && !holds(a.doctor_id) &&
+        !window.confirm(`This card needs ${needs}. Check ${doctorName(a.doctor_id)} has it. Approve them?`)) return;
+    rpc('approve_application', { p_application_id: a.application_id });
+  }
   return (
     <ul className="applicants small">
+      {needs && <li className="muted">The roster-app card needs {needs}.</li>}
       {waiting.map((a) => (
         <li key={a.application_id}>
           <span className="badge applied">Applied</span>
           <strong>{doctorName(a.doctor_id)}</strong>
+          {needs && (holds(a.doctor_id)
+            ? <span className="ok">Has {needs} on roster-app</span>
+            : <span className="warn">Check they have {needs}</span>)}
           {a.note && <span className="muted">"{a.note}"</span>}
-          <button onClick={() => rpc('approve_application', { p_application_id: a.application_id })}>Approve</button>
+          <button onClick={() => approve(a)}>Approve</button>
           <button
             className="secondary"
             onClick={() => {

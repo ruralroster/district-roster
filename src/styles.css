@@ -76,6 +76,7 @@ button.danger { color: var(--danger); }
 .small { font-size: 0.85rem; }
 .error { color: var(--danger); margin: 0; }
 .ok { color: var(--ok); margin: 0; }
+.warn { color: var(--danger); font-weight: 600; }
 
 .badge.open { background: #ef4444; border-color: #dc2626; color: #fff; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
