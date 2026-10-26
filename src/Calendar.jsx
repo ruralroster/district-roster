@@ -20,8 +20,8 @@ const STATUS_STYLES = {
     available: { label: 'Shifts you can apply for' },
     applied: { label: "You've applied" },
     booked: { label: "You're booked" },
-    working: { label: 'Working (rostered on roster-app)' },
-    off: { label: 'Not working (leave or unavailable)' },
+    working: { label: 'Working (roster-app)' },
+    off: { label: 'Not available' },
   },
 };
 
@@ -38,8 +38,9 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   const [applications, setApplications] = useState([]);
   // Days the doctor has marked themselves unavailable ("2026-11-03").
   const [unavailable, setUnavailable] = useState(new Set());
-  // Days the doctor's working on roster-app, or not working (leave,
-  // unavailable here or there): "2026-11-03" -> { working, off }.
+  // Days the doctor's working (rostered, or working elsewhere, on
+  // roster-app), blocked here, or on leave on roster-app (which doesn't
+  // block): "2026-11-03" -> { working, off, on_leave }.
   const [dayStatusInfo, setDayStatusInfo] = useState(new Map());
   // For the doctor: notice_id -> { interested, problem } for open shifts
   // their skills fit. problem is why they can't do it (rest, unavailable).
@@ -374,7 +375,9 @@ function DayPanel({ date, notices, applications, availability, unavailable, dayI
         ))}
       </ul>
       {view === 'doctor' && dayInfo?.working && <p className="small">Working: {dayInfo.working}</p>}
-      {view === 'doctor' && dayInfo?.off && !unavailable && <p className="small">Not working: {dayInfo.off}</p>}
+      {view === 'doctor' && dayInfo?.on_leave && (
+        <p className="small">{dayInfo.on_leave}: district shifts are still open to you.</p>
+      )}
       {view === 'doctor' && me && (
         <div className="inline small">
           {unavailable ? (
