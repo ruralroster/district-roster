@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, SKILLS } from './supabase';
 import { formatShiftTime } from './dateUtils';
-import { siteHues, siteStyle } from './siteColours';
+import { HUE_CHOICES, hueStyle, siteHues, siteStyle } from './siteColours';
 
 const skillText = (skill) => (skill === 'Emergency' ? 'Any doctor' : `Needs ${skill}`);
 
@@ -85,6 +85,7 @@ export default function Sites({ districtId, sites, officerSiteIds, onChanged }) 
                 </ul>
               )}
               {canEdit && <AddShiftType siteId={s.site_id} run={run} />}
+              {canEdit && <SiteColour site={s} hue={hues.get(s.site_id)} onChanged={onChanged} />}
               <Escalation site={s} canEdit={canEdit} onChanged={onChanged} />
             </li>
           );

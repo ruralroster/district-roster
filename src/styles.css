@@ -183,3 +183,13 @@ button.danger { color: var(--danger); }
   display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 2px solid; vertical-align: -2px;
   aspect-ratio: auto; padding: 0;
 }
+
+.hue-choices { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.hue-choice {
+  width: 22px; height: 22px; min-width: 0; padding: 0; border-radius: 999px; cursor: pointer;
+  background: hsl(var(--site-hue) 65% 45%); border: 2px solid transparent;
+}
+.hue-choice.chosen { border-color: var(--text); box-shadow: 0 0 0 2px var(--card) inset; }
+@media (prefers-color-scheme: dark) {
+  .hue-choice { background: hsl(var(--site-hue) 65% 62%); }
+}

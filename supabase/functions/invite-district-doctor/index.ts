@@ -9,8 +9,19 @@
 // Uses the same SUPABASE_SERVICE_ROLE_KEY secret as roster-app's
 // invite-staff.
 //
-// Request body: { districtId, name, email, homeSiteId?, skills?, redirectTo? }
-// Response:     { data: { doctorId, invited } } | { error }
+// Two jobs:
+//
+//   New doctor
+//     Request:  { districtId, name, email, homeSiteId?, skills?, redirectTo? }
+//     Response: { data: { doctorId, invited } } | { error }
+//
+//   Invite people already on the list with no login yet (doctors added by
+//   the v3 import, and officers waiting in site_officer_pending)
+//     Request:  { districtId, doctorIds?: [...], officerEmails?: [...], redirectTo? }
+//     Response: { data: { results: [{ email, invited, linked, error? }] } }
+//   Each person is done on their own, so one failure doesn't stop the rest.
+//   Someone who already has a login (e.g. roster-app) is linked without an
+//   email.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -45,7 +56,10 @@ Deno.serve(async (req) => {
     return json({ error: 'Missing Authorization header' }, 401);
   }
 
-  let body: { districtId?: string; name?: string; email?: string; homeSiteId?: string; skills?: string[]; redirectTo?: string };
+  let body: {
+    districtId?: string; name?: string; email?: string; homeSiteId?: string; skills?: string[]; redirectTo?: string;
+    doctorIds?: string[]; officerEmails?: string[];
+  };
   try {
     body = await req.json();
   } catch {
@@ -53,10 +67,11 @@ Deno.serve(async (req) => {
   }
 
   const { districtId, homeSiteId, redirectTo } = body;
+  const inviting = Array.isArray(body.doctorIds) || Array.isArray(body.officerEmails);
   const name = body.name?.trim();
   const email = body.email?.trim().toLowerCase();
-  if (!districtId || !name || !email) {
-    return json({ error: 'districtId, name and email are required' }, 400);
+  if (!districtId || (!inviting && (!name || !email))) {
+    return json({ error: 'districtId, and name and email (or doctorIds/officerEmails), are required' }, 400);
   }
   // Emergency is always held (v3's rule); ignore anything not on the list.
   const skills = ['Emergency', ...(body.skills ?? []).filter((s) => SKILLS.includes(s) && s !== 'Emergency')];
@@ -81,6 +96,56 @@ Deno.serve(async (req) => {
   }
 
   const adminClient = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!);
+
+  if (inviting) {
+    const results = [];
+    // Doctors in this district who have no login yet.
+    const { data: doctors } = await adminClient
+      .from('district_doctors')
+      .select('doctor_id, email')
+      .eq('district_id', districtId)
+      .is('user_id', null)
+      .in('doctor_id', body.doctorIds?.length ? body.doctorIds : ['00000000-0000-0000-0000-000000000000']);
+    for (const d of doctors ?? []) {
+      try {
+        const { userId, invited } = await loginFor(adminClient, d.email, redirectTo);
+        const { error } = await adminClient.from('district_doctors').update({ user_id: userId }).eq('doctor_id', d.doctor_id);
+        if (error) throw error;
+        results.push({ email: d.email, invited, linked: !invited });
+      } catch (e) {
+        results.push({ email: d.email, invited: false, linked: false, error: e.message ?? String(e) });
+      }
+    }
+    // Officers waiting for a login at this district's sites. Creating their
+    // profile turns them into site officers (site_officer_pending_claim).
+    const emails = (body.officerEmails ?? []).map((e) => e.trim().toLowerCase());
+    const { data: pending } = emails.length
+      ? await adminClient
+        .from('site_officer_pending')
+        .select('site_id, email, sites!inner(district_id)')
+        .eq('sites.district_id', districtId)
+        .in('email', emails)
+      : { data: [] };
+    for (const officerEmail of [...new Set((pending ?? []).map((p) => p.email))]) {
+      try {
+        const { userId, invited } = await loginFor(adminClient, officerEmail, redirectTo);
+        if (!invited) {
+          // Their profile already existed, so the claim trigger won't fire.
+          for (const p of (pending ?? []).filter((x) => x.email === officerEmail)) {
+            await adminClient.from('site_officers').upsert(
+              { site_id: p.site_id, user_id: userId, email: officerEmail },
+              { onConflict: 'site_id,user_id', ignoreDuplicates: true },
+            );
+            await adminClient.from('site_officer_pending').delete().eq('site_id', p.site_id).eq('email', officerEmail);
+          }
+        }
+        results.push({ email: officerEmail, invited, linked: !invited });
+      } catch (e) {
+        results.push({ email: officerEmail, invited: false, linked: false, error: e.message ?? String(e) });
+      }
+    }
+    return json({ data: { results } });
+  }
 
   const { data: existingDoctor } = await adminClient
     .from('district_doctors')
@@ -141,3 +206,25 @@ Deno.serve(async (req) => {
 
   return json({ data: { doctorId: doctor.doctor_id, invited } });
 });
+
+// The login for an email: an existing one (no email sent), or a new one
+// with an invite email. Makes sure the profile row exists.
+async function loginFor(adminClient, email: string, redirectTo?: string) {
+  const { data: existingProfile } = await adminClient
+    .from('profiles')
+    .select('user_id')
+    .ilike('email', email)
+    .maybeSingle();
+  if (existingProfile) return { userId: existingProfile.user_id, invited: false };
+
+  const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+    email,
+    redirectTo ? { redirectTo } : undefined,
+  );
+  if (inviteError) throw new Error(`Invite failed: ${inviteError.message}`);
+  const { error: profileError } = await adminClient
+    .from('profiles')
+    .upsert({ user_id: inviteData.user.id, email });
+  if (profileError) throw new Error(`Profile link failed: ${profileError.message}`);
+  return { userId: inviteData.user.id, invited: true };
+}

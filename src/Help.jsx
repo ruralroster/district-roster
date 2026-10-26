@@ -47,7 +47,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           </ul>
         </Section>
         <Section title="Site colours">
-          <p>Each site has its own colour, used for the dots on Calendar days, the stripe beside each shift and on the Sites tab. The key under the Calendar says which is which.</p>
+          <p>Each site has its own colour, used for the dots on Calendar days, the stripe beside each shift and on the Sites tab. The key under the Calendar says which is which. A site's officers can choose its colour on the Sites tab; otherwise one is picked automatically.</p>
         </Section>
       </div>
 
@@ -138,8 +138,9 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           </Section>
           <Section title="Sites and doctors">
             <ul>
-              <li><strong>Sites</strong>: add and remove each site's shift types, and set how long gaps stay local before coming here.</li>
+              <li><strong>Sites</strong>: add and remove each site's shift types, choose its colour, and set how long gaps stay local before coming here.</li>
               <li><strong>Doctors</strong>: invite doctors, set their level, and deactivate anyone who's left.</li>
+              <li>People added without a login (e.g. by the v3 import) are marked <strong>Not invited yet</strong>. Tap <strong>Invite</strong> beside one, or <strong>Invite everyone not invited yet</strong> at the top, which covers officers waiting for a login too. Anyone who already has a login (e.g. roster-app) is linked without an email.</li>
             </ul>
           </Section>
         </div>
@@ -157,7 +158,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           <Section title="Importing from v3">
             <ul>
               <li><strong>Import from v3</strong> reads the v3 roster sheet export: people (doctors and officers, with their real email addresses), shift types and vacancies from today on. TestHub, Cairns and Telehealth are left out.</li>
-              <li>Check the preview: guessed emails are marked. Nobody is emailed an invite by the import.</li>
+              <li>Check the preview: guessed emails are marked. Nobody is emailed an invite by the import; send invites from the Doctors tab when you're ready.</li>
               <li>Doctors start as consultants with the skills from v3; set their levels on the Doctors tab.</li>
             </ul>
           </Section>
