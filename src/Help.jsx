@@ -90,6 +90,15 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
               <li>A night shift is blocked if the morning it runs into is blocked.</li>
             </ul>
           </Section>
+          <Section title="Swapping a shift">
+            <ul>
+              <li>On the <strong>Swaps</strong> tab, <strong>My shifts</strong> lists the DR Roster shifts you're booked on. Tap <strong>List for swap</strong> on one you can't do.</li>
+              <li>Tick <strong>Service disruption</strong> if the shift goes uncovered when nobody takes it, so it stands out. Tick the days or nights of that pay fortnight you could work in return, or none if you just want someone to take it.</li>
+              <li>Doctors who could do it, and the site's officers, are told. <strong>Up for swap</strong> shows other people's listings you could do: <strong>Take it</strong> outright, or <strong>Swap for one of mine</strong> to offer one of your own shifts at the same site on a day they can work.</li>
+              <li>Only shifts that pass the usual rules are offered, checked for both of you as if you'd each given up your own shift: level, skills, blocked days and the 10-hour rest rule.</li>
+              <li>The site's officer approves or declines. Once approved the bookings swap over, roster-app cards included, and you're both told. You can withdraw a listing or an offer while it's waiting.</li>
+            </ul>
+          </Section>
           <Section title="Applying, and what happens next">
             <ol>
               <li>Tap the day, then <strong>Apply</strong> on the shift. You can add a note for the officer.</li>
@@ -124,6 +133,14 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
               <li>For a consultant shift from a roster-app card, DR Roster says which skill the card's consultant needs, and whether each applicant holds it on roster-app. You can still approve someone it can't confirm; you're asked first.</li>
               <li><strong>Mark filled by…</strong> books a doctor directly, without an application. <strong>Reopen</strong> puts a filled shift back up; <strong>Cancel</strong> takes it down and tells anyone involved.</li>
               <li>You're emailed (and notified) when someone applies or withdraws.</li>
+            </ul>
+          </Section>
+          <Section title="Swaps at your sites">
+            <ul>
+              <li>When a doctor lists one of your sites' shifts for swap, you're told. It shows on the <strong>Swaps</strong> tab, marked if it's a service disruption.</li>
+              <li>Offers come in as <strong>will take it</strong>, or a swap for one of their own shifts at the same site. <strong>Approve</strong> moves the bookings (and the roster-app card); <strong>Decline</strong> asks for an optional reason. Both doctors are told either way.</li>
+              <li>The rules are checked again when you approve, so a swap that no longer works is refused with the reason.</li>
+              <li><strong>Take it off the swap list</strong> removes a listing, with an optional reason for the doctor. A listed shift that you reopen, cancel or rebook comes off the list by itself.</li>
             </ul>
           </Section>
           <Section title="Gaps from roster-app">

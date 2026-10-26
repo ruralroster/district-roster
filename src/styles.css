@@ -193,3 +193,9 @@ button.danger { color: var(--danger); }
 @media (prefers-color-scheme: dark) {
   .hue-choice { background: hsl(var(--site-hue) 65% 62%); }
 }
+
+/* Swaps */
+.badge.danger-badge { color: var(--danger); border-color: var(--danger); font-weight: 600; }
+.slot-grid { display: grid; grid-template-columns: auto 48px 48px; gap: 4px 8px; align-items: center; margin-top: 6px; max-width: 320px; }
+.slot-grid input { justify-self: center; width: 18px; height: 18px; }
+.slot-shift { font-weight: 700; }

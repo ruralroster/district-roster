@@ -6,6 +6,7 @@ import Profile from './Profile';
 import Doctors from './Doctors';
 import Sites from './Sites';
 import Help from './Help';
+import Swaps from './Swaps';
 import Admin from './Admin';
 import Notifications from './Notifications';
 import Calendar from './Calendar';
@@ -94,6 +95,7 @@ function Home({ user }) {
 
   const tabs = [
     (me || officerSiteIds.size > 0) && ['calendar', 'Calendar'],
+    (me || officerSiteIds.size > 0) && ['swaps', 'Swaps'],
     (me || officerSiteIds.size > 0 || isSuperAdmin) && ['profile', me ? 'My profile' : 'My account'],
     isOfficer && ['doctors', 'Doctors'],
     officerSiteIds.size > 0 && ['sites', 'Sites'],
@@ -157,6 +159,7 @@ function Home({ user }) {
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}
       {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} officerSiteIds={officerSiteIds} onChanged={reload} />}
       {activeTab === 'admin' && <Admin districts={districts} onChanged={reload} />}
+      {activeTab === 'swaps' && <Swaps districtId={districtId} sites={sites} me={me} officerSiteIds={officerSiteIds} />}
       {activeTab === 'help' && <Help isDoctor={!!me} isOfficer={officerSiteIds.size > 0} isSuperAdmin={isSuperAdmin} />}
     </div>
   );

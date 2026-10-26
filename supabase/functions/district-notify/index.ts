@@ -256,6 +256,42 @@ async function doctorNews(admin) {
   return byDoctor.size;
 }
 
+// Swap news, queued by the swap functions in SQL (district_swap_messages):
+// one email/push per person with all their lines.
+async function swapNews(admin) {
+  const { data: claimed, error } = await admin
+    .from('district_swap_messages')
+    .update({ sent_at: new Date().toISOString() })
+    .is('sent_at', null)
+    .select('user_id, line, push_title, created_at');
+  if (error) throw error;
+  if (!claimed?.length) return 0;
+
+  const byUser = new Map();
+  for (const m of claimed.sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    byUser.set(m.user_id, [...(byUser.get(m.user_id) ?? []), m]);
+  }
+  const userIds = [...byUser.keys()];
+  const [{ data: profiles }, { data: doctors }] = await Promise.all([
+    admin.from('profiles').select('user_id, email').in('user_id', userIds),
+    admin.from('district_doctors').select('user_id, name, notify_email, notify_push').in('user_id', userIds),
+  ]);
+  for (const [userId, messages] of byUser) {
+    const email = profiles?.find((p) => p.user_id === userId)?.email;
+    // As a doctor, their own email/push settings; officers always hear.
+    const doctor = doctors?.find((d) => d.user_id === userId);
+    const lines = messages.map((m) => m.line);
+    await tell(admin, { email, userId, wantsEmail: doctor?.notify_email, wantsPush: doctor?.notify_push }, {
+      subject: lines.length === 1 ? lines[0] : `${plural(lines.length, 'swap update')}`,
+      intro: `${doctor ? `Hi ${doctor.name.split(' ')[0]}, h` : 'H'}ere's what's happening with shift swaps. See the Swaps tab.`,
+      lines,
+      pushTitle: messages.length === 1 ? messages[0].push_title : `${plural(messages.length, 'swap update')}`,
+      tag: 'swaps',
+    });
+  }
+  return byUser.size;
+}
+
 async function sendTest(admin, token: string) {
   const { data: { user } } = await admin.auth.getUser(token);
   if (!user) return json({ error: 'Not signed in' }, 401);
@@ -282,7 +318,8 @@ Deno.serve(async (req) => {
     const shifts = await newShifts(admin);
     const officers = await officerNews(admin);
     const doctors = await doctorNews(admin);
-    return json({ data: { doctorsToldOfNewShifts: shifts, officersTold: officers, doctorsToldOfDecisions: doctors } });
+    const swaps = await swapNews(admin);
+    return json({ data: { doctorsToldOfNewShifts: shifts, officersTold: officers, doctorsToldOfDecisions: doctors, toldOfSwaps: swaps } });
   } catch (err) {
     console.error('district-notify failed:', err);
     return json({ error: String(err?.message ?? err) }, 500);
