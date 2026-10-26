@@ -162,11 +162,12 @@ export function shiftTypeIn(line, shiftTypes, siteName = '') {
 // when the line gave times instead. Neither means a date was given with no
 // shift to go with it. unread: lines naming a shift with no date to use.
 // The level a line asks for: "reg", "registrar" or "PHO" is a registrar
-// shift; "junior", "JHO", "RMO", "SHO", "intern" or "resident" a junior
-// one; anything else a consultant shift.
+// shift; "intern" an intern one; "RMO", "junior", "JHO", "SHO" or
+// "resident" an RMO one; anything else a consultant shift.
 export function positionIn(text) {
   if (/\b(reg|regs|registrar|registrars|pho)\b/i.test(text)) return 'registrar';
-  if (/\b(junior|jho|rmo|sho|intern|interns|resident)\b/i.test(text)) return 'junior';
+  if (/\b(intern|interns)\b/i.test(text)) return 'intern';
+  if (/\b(rmo|rmos|junior|jho|sho|resident)\b/i.test(text)) return 'rmo';
   return 'consultant';
 }
 

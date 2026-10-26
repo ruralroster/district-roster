@@ -29,21 +29,28 @@
 --
 -- 3. Approving: the officer is told which skills the card needs for the
 --    role (district_card_skills), and can still approve anyone. Only for a
---    consultant position: a registrar or junior doesn't need the
+--    consultant position: a registrar or below doesn't need the
 --    consultant's skill.
 --
 -- 4. Endoscopy is a skill, alongside Anaesthetics and O&G.
 --
--- 5. Every district shift has a position: consultant (the default, so
---    every shift posted so far), registrar or junior. A doctor booked
---    from a registrar or junior shift goes on the roster-app card as a
---    registrar, never as a consultant. Escalated shifts take the offer's
---    role (a registrar offer on an intern card is junior), and a posted
---    shift is only linked to an offer for the same level. A consultant
---    shift needs the skill the card's consultant needs; registrar and
---    junior shifts are open to any doctor.
+-- 5. Levels. Every district shift has a position and every doctor a
+--    level, ranked consultant = advanced trainee > registrar > RMO >
+--    intern (district_level_rank). A doctor sees, is told about and can
+--    apply for shifts at their level or below, still filtered by skill as
+--    before; an advanced trainee (a registrar with an advanced skill)
+--    takes consultant shifts like a consultant. Shifts posted so far are
+--    consultant positions and doctors so far consultants, so nothing is
+--    hidden until levels are set (Profile, or the officer's Doctors tab).
+--    A doctor booked from anything below a consultant shift goes on the
+--    roster-app card as a registrar, never as a consultant. Escalated
+--    shifts take the offer's role (a registrar offer on an intern card is
+--    an intern shift), and a posted shift is only linked to an offer for
+--    the same level. A consultant shift needs the skill the card's
+--    consultant needs; lower ones are open to any doctor.
 --
--- Run after 2026-10-28c_escalation.sql and roster-app's
+-- Run after 2026-10-28_available_shifts.sql, 2026-10-28c_escalation.sql
+-- and roster-app's
 -- 2026-10-28_card_visitors_without_place.sql. Safe to re-run.
 
 BEGIN;
@@ -61,7 +68,25 @@ ALTER TABLE site_shift_types ADD CONSTRAINT site_shift_types_skill_check
 ALTER TABLE district_notices ADD COLUMN IF NOT EXISTS position text NOT NULL DEFAULT 'consultant';
 ALTER TABLE district_notices DROP CONSTRAINT IF EXISTS district_notices_position_check;
 ALTER TABLE district_notices ADD CONSTRAINT district_notices_position_check
-  CHECK (position IN ('consultant', 'registrar', 'junior'));
+  CHECK (position IN ('consultant', 'registrar', 'rmo', 'intern'));
+
+ALTER TABLE district_doctors ADD COLUMN IF NOT EXISTS level text NOT NULL DEFAULT 'consultant';
+ALTER TABLE district_doctors DROP CONSTRAINT IF EXISTS district_doctors_level_check;
+ALTER TABLE district_doctors ADD CONSTRAINT district_doctors_level_check
+  CHECK (level IN ('consultant', 'advanced_trainee', 'registrar', 'rmo', 'intern'));
+
+-- consultant = advanced trainee > registrar > RMO > intern, for doctors'
+-- levels and shifts' positions alike.
+CREATE OR REPLACE FUNCTION district_level_rank(p_level text)
+RETURNS int
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE p_level
+    WHEN 'consultant' THEN 4 WHEN 'advanced_trainee' THEN 4
+    WHEN 'registrar' THEN 3 WHEN 'rmo' THEN 2 WHEN 'intern' THEN 1
+    ELSE 0 END;
+$$;
 
 -- roster-app advanced skills in district terms. Unknown ones are left to
 -- the officer (district_card_skills names them when approving).
@@ -310,7 +335,7 @@ BEGIN
      AND n.status IN ('open', 'filled')
      AND n.source <> 'roster_app'
      -- Same level: a consultant offer for a consultant shift, a registrar
-     -- offer for a registrar or junior one.
+     -- offer for anything below a consultant shift.
      AND (n.position = 'consultant') = (o.role = 'consultant')
     WHERE NOT EXISTS (SELECT 1 FROM district_escalations e WHERE e.volunteer_offer_id = o.volunteer_offer_id)
       AND NOT EXISTS (SELECT 1 FROM district_escalations e WHERE e.notice_id = n.notice_id)
@@ -373,12 +398,12 @@ BEGIN
     )
     SELECT offers.*,
            -- A consultant needs the card's consultant skill; registrars and
-           -- juniors are open to any doctor.
+           -- below are open to any doctor.
            CASE WHEN offers.role = 'consultant'
                 THEN district_skill_for(district_consultant_skill_ids(offers.theatre_activity_id))
                 ELSE 'Emergency' END AS skill,
            CASE WHEN offers.role = 'consultant' THEN 'consultant'
-                WHEN offers.required_grade = 'intern' THEN 'junior'
+                WHEN offers.required_grade = 'intern' THEN 'intern'
                 ELSE 'registrar' END AS position
     FROM offers
     WHERE offers.start_time IS NOT NULL AND offers.end_time IS NOT NULL
@@ -431,7 +456,7 @@ BEGIN
   IF NOT FOUND THEN
     RETURN jsonb_build_object('skills', '[]'::jsonb, 'holders', '[]'::jsonb);
   END IF;
-  -- A registrar or junior doesn't need the consultant's skill.
+  -- A registrar or below doesn't need the consultant's skill.
   IF v_esc.role <> 'consultant' THEN
     RETURN jsonb_build_object('skills', '[]'::jsonb, 'holders', '[]'::jsonb);
   END IF;
@@ -452,5 +477,106 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION district_card_skills(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION district_card_skills(uuid) TO authenticated;
+
+-- Who's told about a new shift, what the Calendar shows a doctor and who
+-- can apply: as in 2026-10-28_available_shifts.sql, plus the level.
+CREATE OR REPLACE FUNCTION district_notice_recipients(p_notice_ids uuid[])
+RETURNS TABLE (notice_id uuid, doctor_id uuid)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT n.notice_id, d.doctor_id
+  FROM district_notices n
+  JOIN district_doctors d ON d.district_id = n.district_id
+  WHERE n.notice_id = ANY (p_notice_ids)
+    AND n.status = 'open'
+    AND d.active
+    AND d.user_id IS NOT NULL
+    AND n.required_skill = ANY (d.skills)
+    AND district_level_rank(d.level) >= district_level_rank(n.position)
+    AND n.site_id = ANY (d.interested_site_ids)
+    AND NOT district_day_unavailable(d.doctor_id, n.notice_id)
+    AND district_rested(d.doctor_id, n.notice_id);
+$$;
+
+CREATE OR REPLACE FUNCTION my_shift_availability(p_district_id uuid, p_from date, p_to date)
+RETURNS TABLE (notice_id uuid, interested boolean, problem text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT n.notice_id,
+         n.site_id = ANY (d.interested_site_ids),
+         CASE
+           WHEN district_day_unavailable(d.doctor_id, n.notice_id) THEN 'You''ve marked this day unavailable'
+           ELSE district_rest_problem(d.doctor_id, n.notice_id)
+         END
+  FROM district_notices n
+  JOIN district_doctors d ON d.district_id = n.district_id AND d.user_id = auth.uid() AND d.active
+  WHERE n.district_id = p_district_id
+    AND n.status = 'open'
+    AND n.shift_date BETWEEN p_from AND p_to
+    AND n.required_skill = ANY (d.skills)
+    AND district_level_rank(d.level) >= district_level_rank(n.position);
+$$;
+
+REVOKE EXECUTE ON FUNCTION district_notice_recipients(uuid[]) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION district_notice_recipients(uuid[]) TO service_role;
+REVOKE EXECUTE ON FUNCTION my_shift_availability(uuid, date, date) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION my_shift_availability(uuid, date, date) TO authenticated;
+
+CREATE OR REPLACE FUNCTION apply_for_notice(p_notice_id uuid, p_note text DEFAULT NULL)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_notice district_notices%ROWTYPE;
+  v_doctor district_doctors%ROWTYPE;
+  v_problem text;
+  v_id uuid;
+BEGIN
+  SELECT * INTO v_notice FROM district_notices WHERE notice_id = p_notice_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'That shift no longer exists';
+  END IF;
+  SELECT * INTO v_doctor FROM district_doctors
+  WHERE district_id = v_notice.district_id AND user_id = auth.uid() AND active;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Only doctors in this district can apply';
+  END IF;
+  IF v_notice.status <> 'open' THEN
+    RAISE EXCEPTION 'This shift has already been filled or cancelled';
+  END IF;
+  IF v_notice.shift_date < (now() AT TIME ZONE 'Australia/Brisbane')::date THEN
+    RAISE EXCEPTION 'This shift is in the past';
+  END IF;
+  IF NOT v_notice.required_skill = ANY (v_doctor.skills) THEN
+    RAISE EXCEPTION 'This shift needs %, which isn''t on your profile', v_notice.required_skill;
+  END IF;
+  IF district_level_rank(v_doctor.level) < district_level_rank(v_notice.position) THEN
+    RAISE EXCEPTION 'This is a % shift, above the level on your profile', replace(v_notice.position, 'rmo', 'RMO');
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM district_applications
+    WHERE notice_id = p_notice_id AND doctor_id = v_doctor.doctor_id AND status IN ('pending', 'approved')
+  ) THEN
+    RAISE EXCEPTION 'You''ve already applied for this shift';
+  END IF;
+  v_problem := district_rest_problem(v_doctor.doctor_id, p_notice_id);
+  IF v_problem IS NOT NULL THEN
+    RAISE EXCEPTION '%', v_problem;
+  END IF;
+
+  INSERT INTO district_applications (notice_id, doctor_id, note)
+  VALUES (p_notice_id, v_doctor.doctor_id, nullif(trim(p_note), ''))
+  RETURNING application_id INTO v_id;
+  RETURN v_id;
+END;
+$$;
 
 COMMIT;

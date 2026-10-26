@@ -19,7 +19,12 @@ export const appUrl = window.location.origin + window.location.pathname;
 
 export const SKILLS = ['Emergency', 'Anaesthetics', 'O&G', 'Endoscopy'];
 
-// A district shift's level. A registrar or junior shift books the doctor
+// A district shift's level. Anything below consultant books the doctor
 // onto a roster-app card as a registrar.
-export const POSITIONS = ['consultant', 'registrar', 'junior'];
-export const POSITION_LABEL = { consultant: 'Consultant', registrar: 'Registrar', junior: 'Junior' };
+export const POSITIONS = ['consultant', 'registrar', 'rmo', 'intern'];
+export const POSITION_LABEL = { consultant: 'Consultant', registrar: 'Registrar', rmo: 'RMO', intern: 'Intern' };
+
+// A doctor's level: they see shifts at it or below, ranked consultant =
+// advanced trainee > registrar > RMO > intern (district_level_rank).
+export const LEVELS = ['consultant', 'advanced_trainee', 'registrar', 'rmo', 'intern'];
+export const LEVEL_LABEL = { ...POSITION_LABEL, advanced_trainee: 'Advanced trainee' };

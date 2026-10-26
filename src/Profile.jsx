@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from './supabase';
+import { supabase, LEVELS, LEVEL_LABEL } from './supabase';
 import SkillPicker from './SkillPicker';
 
 export default function Profile({ doctor, sites, onSaved }) {
@@ -8,6 +8,7 @@ export default function Profile({ doctor, sites, onSaved }) {
     phone: doctor.phone ?? '',
     home_site_id: doctor.home_site_id ?? '',
     skills: doctor.skills,
+    level: doctor.level ?? 'consultant',
     notify_email: doctor.notify_email,
     notify_push: doctor.notify_push,
     interested_site_ids: doctor.interested_site_ids ?? [],
@@ -29,6 +30,7 @@ export default function Profile({ doctor, sites, onSaved }) {
         phone: form.phone.trim() || null,
         home_site_id: form.home_site_id || null,
         skills: form.skills,
+        level: form.level,
         notify_email: form.notify_email,
         notify_push: form.notify_push,
         interested_site_ids: form.interested_site_ids,
@@ -64,6 +66,17 @@ export default function Profile({ doctor, sites, onSaved }) {
             <option key={s.site_id} value={s.site_id}>{s.name}</option>
           ))}
         </select>
+      </label>
+      <label>
+        Level
+        <select value={form.level} onChange={(e) => set('level')(e.target.value)}>
+          {LEVELS.map((k) => (
+            <option key={k} value={k}>{LEVEL_LABEL[k]}</option>
+          ))}
+        </select>
+        <span className="small muted">
+          You'll see shifts at your level and below. An advanced trainee sees consultant shifts that match their skills.
+        </span>
       </label>
       <fieldset>
         <legend>Skills</legend>

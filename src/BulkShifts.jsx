@@ -198,8 +198,8 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
           <p className="small muted">
             One tab per site, named exactly as the site (e.g. "Yarrabah"), with a <strong>Date</strong> column and a{' '}
             <strong>Shift</strong> column naming the site's shift type. Start and Finish columns are optional, for shifts
-            that aren't a regular type. A Position column (Consultant, Registrar or Junior) is optional too; without one,
-            a shift is a consultant shift unless its name says reg or junior.
+            that aren't a regular type. A Position column (Consultant, Registrar, RMO or Intern) is optional too;
+            without one, a shift is a consultant shift unless its name says reg, RMO or intern.
           </p>
           <input type="file" accept=".xlsx,.xls,.csv" onChange={readFile} />
         </>

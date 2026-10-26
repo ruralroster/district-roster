@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase, appUrl } from './supabase';
+import { supabase, appUrl, LEVELS, LEVEL_LABEL } from './supabase';
 import SkillPicker from './SkillPicker';
 
 const emptyInvite = { name: '', email: '', homeSiteId: '', skills: ['Emergency'] };
@@ -50,8 +50,12 @@ export default function Doctors({ districtId, sites }) {
   }
 
   async function setActive(doctor, active) {
+    update(doctor, { active });
+  }
+
+  async function update(doctor, changes) {
     setError('');
-    const { error } = await supabase.from('district_doctors').update({ active }).eq('doctor_id', doctor.doctor_id);
+    const { error } = await supabase.from('district_doctors').update(changes).eq('doctor_id', doctor.doctor_id);
     if (error) setError(error.message);
     load();
   }
@@ -74,6 +78,11 @@ export default function Doctors({ districtId, sites }) {
                 </div>
                 <div className="small">{d.skills.join(', ')}</div>
               </div>
+              <select value={d.level ?? 'consultant'} onChange={(e) => update(d, { level: e.target.value })} aria-label={`${d.name}'s level`}>
+                {LEVELS.map((k) => (
+                  <option key={k} value={k}>{LEVEL_LABEL[k]}</option>
+                ))}
+              </select>
               <button className="secondary" onClick={() => setActive(d, !d.active)}>
                 {d.active ? 'Deactivate' : 'Reactivate'}
               </button>

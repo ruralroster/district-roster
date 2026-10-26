@@ -59,9 +59,9 @@ function times(n) {
 }
 
 // "Mon 3 Nov · Yarrabah · Emergency (Plus On-call) 08:00–08:00 (24h)"
-// "Registrar"/"Junior" unless the title already says so (escalated shifts'
+// "Registrar"/"RMO"/"Intern" unless the title already says so (escalated shifts'
 // titles do); consultant is the default and goes unsaid.
-const LEVEL = { registrar: 'Registrar', junior: 'Junior' };
+const LEVEL = { registrar: 'Registrar', rmo: 'RMO', intern: 'Intern' };
 const levelText = (n) => (LEVEL[n.position] && !(n.title ?? '').includes(LEVEL[n.position]) ? `${LEVEL[n.position]} ` : '');
 const shiftLine = (n) => `${dayLabel(n.shift_date)} · ${n.sites?.name ?? ''} · ${levelText(n)}${n.title ? `${n.title} ` : ''}${times(n)}`;
 

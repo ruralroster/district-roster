@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { supabase, SKILLS, POSITIONS, POSITION_LABEL } from './supabase';
+import { supabase, SKILLS, POSITIONS, POSITION_LABEL, LEVEL_LABEL } from './supabase';
 import { getMondayOfWeek, toLocalDateStr, isSameDate, formatShiftTime } from './dateUtils';
 import BulkShifts from './BulkShifts';
 
@@ -96,7 +96,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
     if (!isOfficer) return;
     supabase
       .from('district_doctors')
-      .select('doctor_id, name')
+      .select('doctor_id, name, level')
       .eq('district_id', districtId)
       .eq('active', true)
       .order('name')
@@ -430,6 +430,7 @@ function Applicants({ notice, applications, doctors, rpc }) {
         <li key={a.application_id}>
           <span className="badge applied">Applied</span>
           <strong>{doctorName(a.doctor_id)}</strong>
+          <span className="muted">{LEVEL_LABEL[doctors.find((d) => d.doctor_id === a.doctor_id)?.level] ?? ''}</span>
           {needs && (holds(a.doctor_id)
             ? <span className="ok">Has {needs} on roster-app</span>
             : <span className="warn">Check they have {needs}</span>)}
