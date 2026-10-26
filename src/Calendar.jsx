@@ -20,7 +20,8 @@ const STATUS_STYLES = {
     available: { label: 'Shifts you can apply for' },
     applied: { label: "You've applied" },
     booked: { label: "You're booked" },
-    unavailable: { label: 'Not available' },
+    working: { label: 'Working (rostered on roster-app)' },
+    off: { label: 'Not working (leave or unavailable)' },
   },
 };
 
@@ -37,6 +38,9 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   const [applications, setApplications] = useState([]);
   // Days the doctor has marked themselves unavailable ("2026-11-03").
   const [unavailable, setUnavailable] = useState(new Set());
+  // Days the doctor's working on roster-app, or not working (leave,
+  // unavailable here or there): "2026-11-03" -> { working, off }.
+  const [dayStatusInfo, setDayStatusInfo] = useState(new Map());
   // For the doctor: notice_id -> { interested, problem } for open shifts
   // their skills fit. problem is why they can't do it (rest, unavailable).
   const [availability, setAvailability] = useState(new Map());
@@ -86,6 +90,12 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
         p_to: rangeEnd,
       });
       setAvailability(new Map((avail ?? []).map((a) => [a.notice_id, a])));
+      const { data: dayInfo } = await supabase.rpc('my_day_status', {
+        p_district_id: districtId,
+        p_from: rangeStart,
+        p_to: rangeEnd,
+      });
+      setDayStatusInfo(new Map((dayInfo ?? []).map((d) => [d.day, d])));
     }
   }, [districtId, rangeStart, rangeEnd, me]);
 
@@ -138,8 +148,11 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
     const canCount = list.filter(canDo).length;
     if (list.some((n) => n.filled_by_doctor_id === me?.doctor_id)) return { status: 'booked', count: canCount };
     if (list.some((n) => myApplication(n.notice_id)?.status === 'pending')) return { status: 'applied', count: canCount };
-    if (unavailable.has(dateStr)) return { status: 'unavailable', count: 0 };
-    return { status: canCount > 0 ? 'available' : 'none', count: canCount };
+    const info = dayStatusInfo.get(dateStr);
+    if (info?.off || unavailable.has(dateStr)) return { status: 'off', count: 0 };
+    // Rostered elsewhere: shifts the rest rules leave room for still show.
+    if (canCount > 0) return { status: 'available', count: canCount };
+    return { status: info?.working ? 'working' : 'none', count: 0 };
   }
 
   // The sites with shifts to show on a day, for its coloured dots: open
@@ -255,6 +268,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
           applications={applications}
           availability={availability}
           unavailable={unavailable.has(toLocalDateStr(selectedDate))}
+          dayInfo={dayStatusInfo.get(toLocalDateStr(selectedDate))}
           view={view}
           sites={sites}
           doctors={doctors}
@@ -279,7 +293,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   );
 }
 
-function DayPanel({ date, notices, applications, availability, unavailable, view, sites, doctors, me, onChanged }) {
+function DayPanel({ date, notices, applications, availability, unavailable, dayInfo, view, sites, doctors, me, onChanged }) {
   const [error, setError] = useState('');
   const hues = siteHues(sites);
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
@@ -359,6 +373,8 @@ function DayPanel({ date, notices, applications, availability, unavailable, view
           </li>
         ))}
       </ul>
+      {view === 'doctor' && dayInfo?.working && <p className="small">Working: {dayInfo.working}</p>}
+      {view === 'doctor' && dayInfo?.off && !unavailable && <p className="small">Not working: {dayInfo.off}</p>}
       {view === 'doctor' && me && (
         <div className="inline small">
           {unavailable ? (

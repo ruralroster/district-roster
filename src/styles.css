@@ -123,8 +123,10 @@ button.danger { color: var(--danger); }
 .cal-available:hover { background: #0284c7; }
 .cal-applied { background: #f59e0b; border-color: #d97706; color: #fff; }
 .cal-applied:hover { background: #d97706; }
-.cal-unavailable { background: #e5e7eb; border-color: #9ca3af; color: #6b7280; text-decoration: line-through; }
-.cal-unavailable:hover { background: #d1d5db; }
+.cal-off { background: #e5e7eb; border-color: #9ca3af; color: #6b7280; text-decoration: line-through; }
+.cal-off:hover { background: #d1d5db; }
+.cal-working { background: #64748b; border-color: #475569; color: #fff; }
+.cal-working:hover { background: #475569; }
 
 .cal-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .cal-legend div { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #4b5563; }
