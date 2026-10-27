@@ -141,7 +141,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           </Section>
           <Section title="Swaps at your sites">
             <ul>
-              <li>Doctors list shifts they can't do on the Swaps tab (or roster-app shifts from roster-app) and find a pairing among themselves: someone taking it, or swapping one of their own shifts at the same site in the same pay fortnight. You're told once there's an offer to decide.</li>
+              <li>Doctors list shifts they can't do on the Swaps tab (or roster-app shifts from roster-app) and find a pairing among themselves: always one for one, another doctor giving one of their own shifts in return on a day the lister said they could work, in the same pay fortnight, so nobody's shift count drops. It's at the same site unless the lister ticked other sites; then both sites' officers approve. You're told once there's an offer to decide.</li>
               <li>On the <strong>Swaps</strong> tab, each listing shows its offers. <strong>Approve</strong> checks the rules again and moves the bookings (roster-app too: to the doctor's own booking if they're staff there, otherwise as a visitor marked From DR Roster). <strong>Decline</strong> asks for an optional reason. Both doctors are told either way.</li>
               <li>Until you approve, the doctor who listed it still works it.</li>
               <li><strong>Take it off the swap list</strong> removes a listing, with an optional reason for the doctor. A listed shift that's reopened, cancelled, rebooked, or changed on roster-app comes off the list by itself.</li>
