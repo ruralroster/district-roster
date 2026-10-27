@@ -279,7 +279,7 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
           </div>
           <p className="small muted">
             Only swaps you could actually do: their shift for one of yours on a day or night they can work, with both of you
-            passing the rules afterwards (your roster-app roster counts). Same site only, unless you tick <strong>Look across
+            passing the rules afterwards (your Rostar roster counts). Same site only, unless you tick <strong>Look across
             sites</strong>: then one of yours at another site they've said they'd go to. It's always one for one, so nobody's shifts in the fortnight
             go down. The officers approve every swap: both sites' for a swap across sites.
           </p>
@@ -410,7 +410,7 @@ function MyShifts({ shifts, swapsFor, otherSites, setOtherSites, today, offers, 
         </div>
       </div>
       <p className="small muted">
-        Every shift you work: DR Roster shifts you've been approved for and, if you're on roster-app, your roster there. List
+        Every shift you work: DR Roster shifts you've been approved for and, if you're on Rostar, your roster there. List
         one for swap if you can't do it; you still work it unless a swap is approved.
       </p>
       {shifts.length === 0 && <p className="muted">No upcoming shifts.</p>}
@@ -512,7 +512,7 @@ function MyShiftRow({ item, swaps, otherSites, setOtherSites, offers, name, noti
     <li className="row column site-stripe" style={style}>
       <div>
         <ShiftText notice={item.shift} />
-        {item.assignmentId && <span className="small muted"> (roster-app)</span>}
+        {item.assignmentId && <span className="small muted"> (Rostar)</span>}
         {l && <span className="badge applied">Up for swap</span>}
         {l?.service_disruption && <span className="badge danger-badge">Service disruption</span>}
       </div>

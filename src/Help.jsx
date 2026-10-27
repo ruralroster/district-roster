@@ -19,7 +19,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
         <h2>Help</h2>
         <p className="muted">
           DR Roster is the district's shift board: sites post shifts they can't fill locally, and district doctors
-          pick them up. It shares logins with roster-app. Tap a section to open it.
+          pick them up. It shares logins with Rostar. Tap a section to open it.
         </p>
       </div>
 
@@ -27,8 +27,8 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
         <h3>Everyone</h3>
         <Section title="Signing in and two-factor" open={!isDoctor && !isOfficer && !isSuperAdmin}>
           <ul>
-            <li>You're invited by email: the link takes you to a page to set your password. If you already use roster-app, it's the same login and password.</li>
-            <li>Two-factor (a 6-digit code from an authenticator app) is under <strong>My profile</strong> or <strong>My account</strong>. It's the same setting as roster-app, so turning it on in one turns it on in both.</li>
+            <li>You're invited by email: the link takes you to a page to set your password. If you already use Rostar, it's the same login and password.</li>
+            <li>Two-factor (a 6-digit code from an authenticator app) is under <strong>My profile</strong> or <strong>My account</strong>. It's the same setting as Rostar, so turning it on in one turns it on in both.</li>
             <li>Forgotten your password? Use <strong>Forgot password</strong> on the sign-in page.</li>
           </ul>
         </Section>
@@ -43,7 +43,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           <ul>
             <li>You get emails, and phone notifications on any device you turn them on for under <strong>Notifications on this device</strong>. <strong>Send me a test</strong> checks it's working.</li>
             <li>DR Roster checks for news every 30 minutes from 6:00 to 21:00, so nothing arrives overnight. Each thing is only sent once.</li>
-            <li><strong>New shifts</strong>: a shift posted on DR Roster is sent once, straight away, to the doctors who can do it at the sites they'd work at. Shifts passed on from a roster-app card nobody locally took aren't sent one by one.</li>
+            <li><strong>New shifts</strong>: a shift posted on DR Roster is sent once, straight away, to the doctors who can do it at the sites they'd work at. Shifts passed on from a Rostar card nobody locally took aren't sent one by one.</li>
             <li><strong>Monday summary</strong>: every Monday at 9:00, doctors get one email listing all the open shifts over the next 6 weeks they can do at the sites they'd work at (not ones they've already applied for). Nothing is sent if there aren't any.</li>
             <li>Email and phone notifications can each be turned off in your profile.</li>
           </ul>
@@ -68,7 +68,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
             <p>The Calendar's <strong>Shifts for me</strong> only shows open shifts you can actually do:</p>
             <ul>
               <li>at a site you'd work at, at or below your level, and needing a skill you hold;</li>
-              <li><strong>10 hours' rest</strong>: it starts at least 10 hours after any shift you're working (roster-app or DR Roster, not on-call), and finishes at least 10 hours before a shift at your home site or on your roster-app roster;</li>
+              <li><strong>10 hours' rest</strong>: it starts at least 10 hours after any shift you're working (Rostar or DR Roster, not on-call), and finishes at least 10 hours before a shift at your home site or on your Rostar roster;</li>
               <li>not on a day that's blocked (next section).</li>
             </ul>
             <p><strong>Look across sites</strong> starts ticked, showing every site you'd work at; untick it to see only your home site's shifts. (Swaps are the other way round: your own site unless you tick it.) Shifts you've applied for or are booked on always show.</p>
@@ -78,7 +78,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
               <li><span className="help-swatch cal-available" /> <strong>The site's colour</strong>: shifts you can apply for (the number is how many). Shifts at more than one site that day make it striped in each site's colour.</li>
               <li><span className="help-swatch cal-applied" /> <strong>Amber</strong>: you've applied.</li>
               <li><span className="help-swatch cal-booked" /> <strong>Green</strong>: you're booked.</li>
-              <li><span className="help-swatch cal-working" /> <strong>Pale grey</strong>: you're working: rostered on roster-app, or marked working elsewhere there. A short roster-app shift can still leave room for a district one, which then shows in the site's colour instead.</li>
+              <li><span className="help-swatch cal-working" /> <strong>Pale grey</strong>: you're working: rostered on Rostar, or marked working elsewhere there. A short Rostar shift can still leave room for a district one, which then shows in the site's colour instead.</li>
               <li><span className="help-swatch cal-off" /> <strong>Grey, struck through</strong>: you've marked the day not available here.</li>
               <li><span className="help-swatch cal-none" /> <strong>White</strong>: nothing for you.</li>
             </ul>
@@ -87,19 +87,19 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           <Section title="Days you can't work">
             <ul>
               <li>Tap a day, then <strong>I'm not available this day</strong>. Its shifts are hidden and you're not told about new ones. Tap <strong>I'm available after all</strong> to undo it.</li>
-              <li>On roster-app's availability calendar, a <strong>dark grey</strong> day (unavailable, working elsewhere) blocks the day here too.</li>
-              <li>A <strong>red</strong> roster-app day (leave, a day off) doesn't: you might want to pick up a shift while you're off. The day says so when you tap it.</li>
+              <li>On Rostar's availability calendar, a <strong>dark grey</strong> day (unavailable, working elsewhere) blocks the day here too.</li>
+              <li>A <strong>red</strong> Rostar day (leave, a day off) doesn't: you might want to pick up a shift while you're off. The day says so when you tap it.</li>
               <li>A night shift is blocked if the morning it runs into is blocked.</li>
             </ul>
           </Section>
           <Section title="Swapping a shift">
             <p>The idea: the two doctors find a pairing that works for both of them on the marketplace, and the rostering officer approves it. Until then you still work your shift, so the site never loses cover.</p>
             <ol>
-              <li><strong>List it.</strong> On the <strong>Swaps</strong> tab, <strong>My shifts</strong> has every shift you work: DR Roster shifts you've been approved for and, if you're on roster-app, your roster there. Switch between <strong>List</strong> and <strong>Calendar</strong> (tap a day to see its shifts). Tap <strong>List for swap</strong> on the shift. Roster-app's <strong>Variation → Swap a shift (DR Roster)</strong> does the same. Tick <strong>Service disruption</strong> if the shift goes uncovered when nobody takes it, and tick the days or nights of that pay fortnight you could work in return (at least one). A swap is always one shift for one shift: nobody can reduce their shifts in a fortnight, as that would change their FTE. To pick up extra shifts, apply for open ones on the Calendar. It's on the marketplace straight away.</li>
-              <li><strong>Find a pairing.</strong> Only doctors who could close the loop are told, and <strong>Up for swap</strong> only shows them swaps they could do. They choose <strong>Swap for one of mine</strong>: one of their own shifts (DR Roster or roster-app) at the same site, on a day or night you said you could work, so the swap stays in the pay fortnight. Only shifts that pass the rules for both of you are offered: level, skills, blocked days and the 10-hour rest rule, each as if you'd already given up your own shift.</li>
+              <li><strong>List it.</strong> On the <strong>Swaps</strong> tab, <strong>My shifts</strong> has every shift you work: DR Roster shifts you've been approved for and, if you're on Rostar, your roster there. Switch between <strong>List</strong> and <strong>Calendar</strong> (tap a day to see its shifts). Tap <strong>List for swap</strong> on the shift. Rostar's <strong>Variation → Swap a shift (DR Roster)</strong> does the same. Tick <strong>Service disruption</strong> if the shift goes uncovered when nobody takes it, and tick the days or nights of that pay fortnight you could work in return (at least one). A swap is always one shift for one shift: nobody can reduce their shifts in a fortnight, as that would change their FTE. To pick up extra shifts, apply for open ones on the Calendar. It's on the marketplace straight away.</li>
+              <li><strong>Find a pairing.</strong> Only doctors who could close the loop are told, and <strong>Up for swap</strong> only shows them swaps they could do. They choose <strong>Swap for one of mine</strong>: one of their own shifts (DR Roster or Rostar) at the same site, on a day or night you said you could work, so the swap stays in the pay fortnight. Only shifts that pass the rules for both of you are offered: level, skills, blocked days and the 10-hour rest rule, each as if you'd already given up your own shift.</li>
               <li><strong>Or start from your own shift.</strong> Under <strong>My shifts</strong>, <strong>Find a swap</strong> checks everything already up for swap and lists the ones you could trade that shift for straight away: on one of their days, with both of you passing the rules. The number on the button is how many. Tap <strong>Offer swap</strong>; there's no need to list your own shift first.</li>
               <li><strong>Other sites.</strong> When listing, tick <strong>I'd take a shift in return at another site I'd work at</strong> if you'd go elsewhere. Doctors looking for a swap can then tick <strong>Look across sites</strong> on <strong>Up for swap</strong> or <strong>Find a swap</strong> (it's off by default, so they only see their own site): for example, give your Innisfail shift to an Atherton doctor who'll come to Innisfail, and do their Atherton shift. All the same rules apply to both of you, and it has to be a site each of you has ticked under Sites I'd work at. Both sites' officers approve it, since each is getting a different doctor; the swap happens on the second approval.</li>
-              <li><strong>The officer approves.</strong> The offer goes to the site's rostering officer, who approves or declines it (with a reason). Only then do the bookings swap over, roster-app included, and you're both told.</li>
+              <li><strong>The officer approves.</strong> The offer goes to the site's rostering officer, who approves or declines it (with a reason). Only then do the bookings swap over, Rostar included, and you're both told.</li>
             </ol>
             <p>You can withdraw a listing or an offer until the officer decides.</p>
           </Section>
@@ -108,7 +108,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
               <li>Tap the day, then <strong>Apply</strong> on the shift. You can add a note for the officer.</li>
               <li>The site's officers are told. You can <strong>Withdraw</strong> while it's waiting.</li>
               <li>You're emailed (and notified) when you're approved or declined, or if the shift is later cancelled or given to someone else.</li>
-              <li>If the shift came from roster-app, approving puts you on that roster-app card: as an ordinary booking if you're staff there, or as a visitor marked "From DR Roster".</li>
+              <li>If the shift came from Rostar, approving puts you on that Rostar card: as an ordinary booking if you're staff there, or as a visitor marked "From DR Roster".</li>
             </ol>
             <p>If applying says no, the message says why: a clash, the rest rule, your level or skills, or a blocked day.</p>
           </Section>
@@ -134,27 +134,27 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           <Section title="Applicants: approving, declining, filling">
             <ul>
               <li>Each applicant shows their level and note. <strong>Approve</strong> books them; everyone else who applied is told it's been filled. <strong>Decline</strong> asks for an optional reason for them.</li>
-              <li>For a consultant shift from a roster-app card, DR Roster says which skill the card's consultant needs, and whether each applicant holds it on roster-app. You can still approve someone it can't confirm; you're asked first.</li>
+              <li>For a consultant shift from a Rostar card, DR Roster says which skill the card's consultant needs, and whether each applicant holds it on Rostar. You can still approve someone it can't confirm; you're asked first.</li>
               <li><strong>Mark filled by…</strong> books a doctor directly, without an application. <strong>Reopen</strong> puts a filled shift back up; <strong>Cancel</strong> takes it down and tells anyone involved.</li>
               <li>You're emailed (and notified) when someone applies or withdraws.</li>
             </ul>
           </Section>
           <Section title="Swaps at your sites">
             <ul>
-              <li>Doctors list shifts they can't do on the Swaps tab (or roster-app shifts from roster-app) and find a pairing among themselves: always one for one, another doctor giving one of their own shifts in return on a day the lister said they could work, in the same pay fortnight, so nobody's shift count drops. It's at the same site unless the lister ticked other sites; then both sites' officers approve. You're told once there's an offer to decide.</li>
-              <li>On the <strong>Swaps</strong> tab, each listing shows its offers. <strong>Approve</strong> checks the rules again and moves the bookings (roster-app too: to the doctor's own booking if they're staff there, otherwise as a visitor marked From DR Roster). <strong>Decline</strong> asks for an optional reason. Both doctors are told either way.</li>
+              <li>Doctors list shifts they can't do on the Swaps tab (or Rostar shifts from Rostar) and find a pairing among themselves: always one for one, another doctor giving one of their own shifts in return on a day the lister said they could work, in the same pay fortnight, so nobody's shift count drops. It's at the same site unless the lister ticked other sites; then both sites' officers approve. You're told once there's an offer to decide.</li>
+              <li>On the <strong>Swaps</strong> tab, each listing shows its offers. <strong>Approve</strong> checks the rules again and moves the bookings (Rostar too: to the doctor's own booking if they're staff there, otherwise as a visitor marked From DR Roster). <strong>Decline</strong> asks for an optional reason. Both doctors are told either way.</li>
               <li>Until you approve, the doctor who listed it still works it.</li>
-              <li><strong>Take it off the swap list</strong> removes a listing, with an optional reason for the doctor. A listed shift that's reopened, cancelled, rebooked, or changed on roster-app comes off the list by itself.</li>
+              <li><strong>Take it off the swap list</strong> removes a listing, with an optional reason for the doctor. A listed shift that's reopened, cancelled, rebooked, or changed on Rostar comes off the list by itself.</li>
             </ul>
           </Section>
-          <Section title="Gaps from roster-app">
+          <Section title="Gaps from Rostar">
             <ul>
-              <li>At a site linked to roster-app, a shift offered for volunteering there that nobody local takes comes here as an open district shift, titled e.g. "ED Day (Consultant)".</li>
-              <li>It comes up after the site's <strong>keep local</strong> time (Sites tab, 72 hours by default), or straight away if the shift starts sooner. Only roster-app's volunteering offers come up, never other empty places.</li>
+              <li>At a site linked to Rostar, a shift offered for volunteering there that nobody local takes comes here as an open district shift, titled e.g. "ED Day (Consultant)".</li>
+              <li>It comes up after the site's <strong>keep local</strong> time (Sites tab, 72 hours by default), or straight away if the shift starts sooner. Only Rostar's volunteering offers come up, never other empty places.</li>
               <li>Its position matches the offer. A consultant shift needs the card's consultant skill; registrar and lower ones are open to any doctor at that level or above.</li>
-              <li>If it's then covered on roster-app, or the offer's withdrawn, it's cancelled here.</li>
-              <li>When it's filled here, the doctor goes onto the roster-app card by themselves and the offer comes off. The shift's notes say how ("On the roster-app card"). Reopening or cancelling takes them off the card again.</li>
-              <li>If you've already posted the same shift here (same site, date and hours), the roster-app offer is linked to yours instead of posting a second copy.</li>
+              <li>If it's then covered on Rostar, or the offer's withdrawn, it's cancelled here.</li>
+              <li>When it's filled here, the doctor goes onto the Rostar card by themselves and the offer comes off. The shift's notes say how ("On the Rostar card"). Reopening or cancelling takes them off the card again.</li>
+              <li>If you've already posted the same shift here (same site, date and hours), the Rostar offer is linked to yours instead of posting a second copy.</li>
             </ul>
           </Section>
           <Section title="Locum might be required, urgent alerts and the weekly digest">
@@ -168,7 +168,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
             <ul>
               <li><strong>Sites</strong>: add and remove each site's shift types, choose its colour, and set how long gaps stay local before coming here.</li>
               <li><strong>Doctors</strong>: invite doctors, set their level, and deactivate anyone who's left.</li>
-              <li>People added without a login (e.g. by the v3 import) are marked <strong>Not invited yet</strong>. Tap <strong>Invite</strong> beside one, or <strong>Invite everyone not invited yet</strong> at the top, which covers officers waiting for a login too. Anyone who already has a login (e.g. roster-app) is linked without an email.</li>
+              <li>People added without a login (e.g. by the v3 import) are marked <strong>Not invited yet</strong>. Tap <strong>Invite</strong> beside one, or <strong>Invite everyone not invited yet</strong> at the top, which covers officers waiting for a login too. Anyone who already has a login (e.g. Rostar) is linked without an email.</li>
             </ul>
           </Section>
         </div>
@@ -179,7 +179,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           <h3>Super admin</h3>
           <Section title="Districts, sites and officers">
             <ul>
-              <li>The <strong>Admin</strong> tab creates districts and sites, links a site to its roster-app department (so its officers are officers here and its gaps can come up), and adds site officers.</li>
+              <li>The <strong>Admin</strong> tab creates districts and sites, links a site to its Rostar department (so its officers are officers here and its gaps can come up), and adds site officers.</li>
               <li>You can see every district and site.</li>
             </ul>
           </Section>

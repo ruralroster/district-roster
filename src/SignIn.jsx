@@ -47,7 +47,7 @@ export default function SignIn() {
         <button type="submit" disabled={busy}>Sign in</button>
         <button type="button" className="link" onClick={resetPassword} disabled={busy}>Forgot password?</button>
       </form>
-      <p className="muted small">Uses the same login as roster-app.</p>
+      <p className="muted small">Uses the same login as Rostar.</p>
     </div>
   );
 }

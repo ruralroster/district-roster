@@ -20,7 +20,7 @@ const STATUS_STYLES = {
     available: { label: "Shifts you can apply for, in the site's colour" },
     applied: { label: "You've applied" },
     booked: { label: "You're booked" },
-    working: { label: 'Working (roster-app)' },
+    working: { label: 'Working (Rostar)' },
     off: { label: 'Not available' },
   },
 };
@@ -508,14 +508,14 @@ function Applicants({ notice, applications, doctors, rpc }) {
   }
   return (
     <ul className="applicants small">
-      {needs && <li className="muted">The roster-app card needs {needs}.</li>}
+      {needs && <li className="muted">The Rostar card needs {needs}.</li>}
       {waiting.map((a) => (
         <li key={a.application_id}>
           <span className="badge applied">Applied</span>
           <strong>{doctorName(a.doctor_id)}</strong>
           <span className="muted">{LEVEL_LABEL[doctors.find((d) => d.doctor_id === a.doctor_id)?.level] ?? ''}</span>
           {needs && (holds(a.doctor_id)
-            ? <span className="ok">Has {needs} on roster-app</span>
+            ? <span className="ok">Has {needs} on Rostar</span>
             : <span className="warn">Check they have {needs}</span>)}
           {a.note && <span className="muted">"{a.note}"</span>}
           <button onClick={() => approve(a)}>Approve</button>
