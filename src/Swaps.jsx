@@ -212,7 +212,6 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
                 <li key={l.listing_id} className="row column site-stripe" style={siteStyle(hues, n.site_id)}>
                   <div>
                     <ShiftText notice={n} /> · listed by <strong>{name(l.doctor_id)}</strong>
-                    {l.service_disruption && <span className="badge danger-badge">Service disruption</span>}
                     {l.note && <div className="small muted">"{l.note}"</div>}
                     {l.available_slots.length > 0 && (
                       <div className="small muted">Can work in return: {l.available_slots.map(slotLabel).join(', ')}</div>
@@ -514,7 +513,6 @@ function MyShiftRow({ item, swaps, otherSites, setOtherSites, offers, name, noti
         <ShiftText notice={item.shift} />
         {item.assignmentId && <span className="small muted"> (Rostar)</span>}
         {l && <span className="badge applied">Up for swap</span>}
-        {l?.service_disruption && <span className="badge danger-badge">Service disruption</span>}
       </div>
       {l ? (
         <>
@@ -593,7 +591,6 @@ function MarketRow({ listing: l, notice: n, row, already, lister, notices, Shift
     <li className="row column site-stripe" style={style}>
       <div>
         <ShiftText notice={n} /> · from <strong>{lister}</strong>
-        {l.service_disruption && <span className="badge danger-badge">Service disruption</span>}
         {l.note && <div className="small muted">"{l.note}"</div>}
         {l.available_slots.length > 0 && <div className="small muted">They can work in return: {l.available_slots.map(slotLabel).join(', ')}</div>}
       </div>
@@ -678,7 +675,6 @@ function FoundSwaps({ item, swaps, otherSites, setOtherSites, name, notices, Shi
           <li key={l.listing_id} className="row">
             <span>
               {name(l.doctor_id)}'s <ShiftText notice={notices.get(l.notice_id)} />
-              {l.service_disruption && <span className="badge danger-badge">Service disruption</span>}
               {l.note && <span className="muted"> "{l.note}"</span>}
             </span>
             <button
@@ -704,11 +700,10 @@ function FoundSwaps({ item, swaps, otherSites, setOtherSites, name, notices, Shi
   );
 }
 
-// Listing a shift: service disruption, and the days/nights of its pay
+// Listing a shift: the days/nights of its pay
 // fortnight you could work in return (at least one: a swap never changes
 // anyone's number of shifts).
 function ListForm({ date, busy, onCancel, onSubmit }) {
-  const [disruption, setDisruption] = useState(false);
   const [slots, setSlots] = useState([]);
   const [note, setNote] = useState('');
   const [otherSites, setOtherSites] = useState(false);
@@ -720,13 +715,9 @@ function ListForm({ date, busy, onCancel, onSubmit }) {
       className="stack small"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit({ p_service_disruption: disruption, p_slots: slots.sort(), p_note: note, p_other_sites: otherSites });
+        onSubmit({ p_service_disruption: false, p_slots: slots.sort(), p_note: note, p_other_sites: otherSites });
       }}
     >
-      <label className="check">
-        <input type="checkbox" checked={disruption} onChange={(e) => setDisruption(e.target.checked)} />
-        Service disruption: if nobody takes it, the shift goes uncovered
-      </label>
       <div>
         <div>
           Days or nights you could work in return (this pay fortnight): tick at least one. Whoever takes your shift gives you one of

@@ -369,6 +369,9 @@ function DayPanel({ date, notices, applications, availability, unavailable, dayI
               <span className={n.status === 'open' ? 'badge open' : 'badge'}>
                 {n.status === 'open' ? 'Open' : `Filled: ${doctorName(n.filled_by_doctor_id)}`}
               </span>
+              {n.service_disruption && n.status === 'open' && (
+                <span className="badge danger-badge">Service disruption</span>
+              )}
               {view === 'officer' && n.status === 'open' && n.shift_date <= locumBy && (
                 <span className="badge danger-badge">Locum might be required</span>
               )}
@@ -535,7 +538,7 @@ function Applicants({ notice, applications, doctors, rpc }) {
 }
 
 function PostShift({ sites, shiftTypes, defaultDate, onPosted }) {
-  const blank = { site_id: '', shift_date: '', title: '', start_time: '08:00', end_time: '17:00', required_skill: 'Emergency', position: 'consultant', notes: '' };
+  const blank = { site_id: '', shift_date: '', title: '', start_time: '08:00', end_time: '17:00', required_skill: 'Emergency', position: 'consultant', notes: '', service_disruption: false };
   const [form, setForm] = useState(blank);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -633,6 +636,14 @@ function PostShift({ sites, shiftTypes, defaultDate, onPosted }) {
           <input value={form.notes} onChange={set('notes')} placeholder="Optional" />
         </label>
       </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={form.service_disruption}
+          onChange={(e) => setForm((f) => ({ ...f, service_disruption: e.target.checked }))}
+        />
+        Service disruption: if nobody takes this shift, the service closes (for example, obstetrics goes on bypass)
+      </label>
       <p className="muted small">A finish earlier than the start means it ends the next day; the same as the start, 24 hours.</p>
       {error && <p className="error">{error}</p>}
       {message && <p className="ok">{message}</p>}

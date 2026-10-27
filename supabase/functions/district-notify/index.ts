@@ -67,7 +67,7 @@ function times(n) {
 // titles do); consultant is the default and goes unsaid.
 const LEVEL = { registrar: 'Registrar', rmo: 'RMO', intern: 'Intern' };
 const levelText = (n) => (LEVEL[n.position] && !(n.title ?? '').includes(LEVEL[n.position]) ? `${LEVEL[n.position]} ` : '');
-const shiftLine = (n) => `${dayLabel(n.shift_date)} · ${n.sites?.name ?? ''} · ${levelText(n)}${n.title ? `${n.title} ` : ''}${times(n)}`;
+const shiftLine = (n) => `${n.service_disruption ? 'SERVICE DISRUPTION: ' : ''}${dayLabel(n.shift_date)} · ${n.sites?.name ?? ''} · ${levelText(n)}${n.title ? `${n.title} ` : ''}${times(n)}`;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
