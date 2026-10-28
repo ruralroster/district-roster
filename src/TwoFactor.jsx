@@ -128,7 +128,7 @@ export function TwoFactorSettings() {
   }
 
   async function turnOff() {
-    if (!window.confirm('Turn off two-factor authentication? Signing in to DR Roster and Rostar will only need your password.')) return;
+    if (!window.confirm('Turn off two-factor authentication? Signing in to DR Roster and Rstar will only need your password.')) return;
     setBusy(true);
     setError('');
     const { error } = await supabase.auth.mfa.unenroll({ factorId: factor.id });
@@ -142,7 +142,7 @@ export function TwoFactorSettings() {
       <h2>Two-factor authentication</h2>
       <p className="small muted">
         A code from an authenticator app (like Google Authenticator or Authy) as well as your password when you sign in.
-        It's the same setting as in Rostar.
+        It's the same setting as in Rstar.
       </p>
       {loading ? (
         <p className="muted">Loading…</p>

@@ -46,7 +46,7 @@ export default function Sites({ districtId, sites, officerSiteIds, onChanged }) 
       <ul className="rows">
         {sites.map((s) => {
           const names = [
-            ...(s.department_id ? ['Rostar officers'] : []),
+            ...(s.department_id ? ['Rstar officers'] : []),
             ...officers.filter((o) => o.site_id === s.site_id).map((o) => o.email),
           ];
           const types = shiftTypes.filter((t) => t.site_id === s.site_id);
@@ -55,7 +55,7 @@ export default function Sites({ districtId, sites, officerSiteIds, onChanged }) 
             <li key={s.site_id} className="row column site-stripe" style={siteStyle(hues, s.site_id)}>
               <div>
                 <strong className="site-name">{s.name}</strong>
-                {s.department_id && <span className="badge">On Rostar</span>}
+                {s.department_id && <span className="badge">On Rstar</span>}
                 <div className="muted small">
                   {names.length > 0 ? `Officers: ${names.join(', ')}` : 'No officer yet'}
                 </div>
@@ -138,7 +138,7 @@ function Escalation({ site, canEdit, onChanged }) {
     onChanged();
   }
 
-  const explain = `Gaps offered on Rostar go to the district after ${saved} hours unfilled, or straight away if the shift starts within ${saved} hours. Shifts posted here in DR Roster go to the district at once.`;
+  const explain = `Gaps offered on Rstar go to the district after ${saved} hours unfilled, or straight away if the shift starts within ${saved} hours. Shifts posted here in DR Roster go to the district at once.`;
   if (!canEdit) return <p className="small muted">{explain}</p>;
   return (
     <form className="inline small" onSubmit={save}>

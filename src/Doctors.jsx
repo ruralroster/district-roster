@@ -36,7 +36,7 @@ export default function Doctors({ districtId, sites }) {
 
   // Invites doctors (by id) and officers (by email) already on the list.
   async function inviteExisting(doctorIds, emails, what) {
-    if (!window.confirm(`Send ${what} an invite email to set a password? Anyone who already has a login (e.g. Rostar) is linked without an email.`)) return;
+    if (!window.confirm(`Send ${what} an invite email to set a password? Anyone who already has a login (e.g. Rstar) is linked without an email.`)) return;
     setBusy(true);
     setBulkError('');
     setBulkMessage('');

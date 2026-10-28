@@ -100,9 +100,9 @@ function SiteRow({ site, officers, pending, departments, run }) {
           value={site.department_id ?? ''}
           onChange={(e) => run(supabase.from('sites').update({ department_id: e.target.value || null }).eq('site_id', site.site_id))}
         >
-          <option value="">Not on Rostar</option>
+          <option value="">Not on Rstar</option>
           {departments.map((dep) => (
-            <option key={dep.department_id} value={dep.department_id}>Rostar: {dep.name}</option>
+            <option key={dep.department_id} value={dep.department_id}>Rstar: {dep.name}</option>
           ))}
         </select>
         <button className="link danger" onClick={() => setDeleting(true)}>Delete site</button>
@@ -190,8 +190,8 @@ function DeleteSite({ site, run, onClose }) {
           {counts?.home > 0 && <li>{counts.home} doctor{counts.home === 1 ? '' : 's'} with it as their home site will have no home site</li>}
         </ul>
         <p>
-          <strong>Rostar isn't touched</strong>: the department, staff, roster and cards all stay.
-          {site.department_id && ' To only disconnect it from Rostar, cancel and choose "Not on Rostar" instead.'}
+          <strong>Rstar isn't touched</strong>: the department, staff, roster and cards all stay.
+          {site.department_id && ' To only disconnect it from Rstar, cancel and choose "Not on Rstar" instead.'}
         </p>
         <label>
           Type {site.name} to confirm
