@@ -154,3 +154,45 @@ function Escalation({ site, canEdit, onChanged }) {
     </form>
   );
 }
+
+// The site's colour (Calendar dots, shift stripes): one of twelve hues, or
+// Automatic (siteColours.js spreads those round the wheel).
+function SiteColour({ site, hue, onChanged }) {
+  const [error, setError] = useState('');
+
+  async function choose(next) {
+    setError('');
+    const { error } = await supabase.rpc('set_site_colour', { p_site_id: site.site_id, p_hue: next });
+    if (error) return setError(error.message);
+    onChanged();
+  }
+
+  return (
+    <div className="inline small">
+      <span className="muted">Colour</span>
+      <span className="hue-choices">
+        {HUE_CHOICES.map((h) => (
+          <button
+            key={h}
+            type="button"
+            className={`hue-choice${site.colour_hue === h ? ' chosen' : ''}`}
+            style={hueStyle(h)}
+            aria-label={`Colour ${h}`}
+            aria-pressed={site.colour_hue === h}
+            onClick={() => choose(h)}
+          />
+        ))}
+      </span>
+      <button
+        type="button"
+        className={`link${site.colour_hue == null ? ' muted' : ''}`}
+        disabled={site.colour_hue == null}
+        onClick={() => choose(null)}
+        title={site.colour_hue == null ? `Automatic (hue ${hue})` : undefined}
+      >
+        Automatic
+      </button>
+      {error && <span className="error">{error}</span>}
+    </div>
+  );
+}
