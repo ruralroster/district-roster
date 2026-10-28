@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from './supabase';
 import { formatShiftTime, toLocalDateStr } from './dateUtils';
 import { siteHues, siteStyle } from './siteColours';
+import { blockedSlots } from './swapSlots';
 
 // The swap marketplace (migrations/2026-10-31_swaps.sql), v3's flow:
 // doctors list a shift they're booked on (or a roster-app one, from
@@ -393,6 +394,7 @@ function MyShifts({ shifts, swapsFor, otherSites, setOtherSites, today, offers, 
       setListing={setListing}
       busy={busy}
       rpc={rpc}
+      allShifts={shifts}
     />
   );
 
@@ -503,7 +505,7 @@ function ShiftCalendar({ shifts, today, hues, day, setDay }) {
 }
 
 // One of my shifts: up for swap (offers so far, withdraw), or list it.
-function MyShiftRow({ item, swaps, otherSites, setOtherSites, offers, name, notices, ShiftText, style, listing, setListing, busy, rpc }) {
+function MyShiftRow({ item, swaps, otherSites, setOtherSites, offers, name, notices, ShiftText, style, listing, setListing, busy, rpc, allShifts }) {
   const [finding, setFinding] = useState(false);
   const l = item.listing;
   const pending = l ? offers.filter((o) => o.listing_id === l.listing_id && o.status === 'pending') : [];
@@ -545,6 +547,7 @@ function MyShiftRow({ item, swaps, otherSites, setOtherSites, offers, name, noti
       ) : listing === item.key ? (
         <ListForm
           date={item.shift.shift_date}
+          blocked={blockedSlots(allShifts.map((i) => i.shift), item.shift, fortnightDays(item.shift.shift_date), toLocalDateStr(new Date()), dayLabel)}
           busy={busy}
           onCancel={() => setListing(null)}
           onSubmit={async (args) => {
@@ -703,7 +706,7 @@ function FoundSwaps({ item, swaps, otherSites, setOtherSites, name, notices, Shi
 // Listing a shift: the days/nights of its pay
 // fortnight you could work in return (at least one: a swap never changes
 // anyone's number of shifts).
-function ListForm({ date, busy, onCancel, onSubmit }) {
+function ListForm({ date, blocked, busy, onCancel, onSubmit }) {
   const [slots, setSlots] = useState([]);
   const [note, setNote] = useState('');
   const [otherSites, setOtherSites] = useState(false);
@@ -721,14 +724,15 @@ function ListForm({ date, busy, onCancel, onSubmit }) {
       <div>
         <div>
           Days or nights you could work in return (this pay fortnight): tick at least one. Whoever takes your shift gives you one of
-          theirs on one of them, so neither of you ends up with fewer shifts.
+          theirs on one of them, so neither of you ends up with fewer shifts. Greyed out: you're working then, or too close to
+          another shift for 10 hours' rest. To swap a day for a night (or back) on the same date, tick the other one that day.
         </div>
         <div className="slot-grid">
           <span />
           <span className="muted">Day</span>
           <span className="muted">Night</span>
           {days.map((d) => (
-            <SlotRow key={d} date={d} slots={slots} toggle={toggle} isShift={d === date} />
+            <SlotRow key={d} date={d} slots={slots} toggle={toggle} isShift={d === date} blocked={blocked} />
           ))}
         </div>
       </div>
@@ -748,14 +752,22 @@ function ListForm({ date, busy, onCancel, onSubmit }) {
   );
 }
 
-function SlotRow({ date, slots, toggle, isShift }) {
+function SlotRow({ date, slots, toggle, isShift, blocked }) {
   return (
     <>
       <span className={isShift ? 'slot-shift' : ''}>{dayLabel(date)}{isShift && ' (this shift)'}</span>
       {['day', 'night'].map((kind) => {
         const slot = `${date}:${kind}`;
         return (
-          <input key={kind} type="checkbox" checked={slots.includes(slot)} onChange={() => toggle(slot)} aria-label={`${dayLabel(date)} ${kind}`} />
+          <input
+            key={kind}
+            type="checkbox"
+            checked={slots.includes(slot)}
+            disabled={blocked.has(slot)}
+            title={blocked.get(slot)}
+            onChange={() => toggle(slot)}
+            aria-label={`${dayLabel(date)} ${kind}${blocked.has(slot) ? `: ${blocked.get(slot)}` : ''}`}
+          />
         );
       })}
     </>
