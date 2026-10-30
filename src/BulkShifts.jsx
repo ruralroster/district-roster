@@ -3,6 +3,7 @@ import { supabase, SKILLS, POSITIONS, POSITION_LABEL } from './supabase';
 import { formatShiftTime, toLocalDateStr } from './dateUtils';
 import { positionIn, readPastedVacancies, shiftTypeIn } from './pasteVacancies';
 import { readDate, readTime } from './v3Import';
+import { checkAgainstPosted } from './postedCheck';
 
 const skillText = (skill) => (skill === 'Emergency' ? 'Any doctor' : `Needs ${skill}`);
 const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -40,32 +41,36 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
     };
   }
 
-  // Unticks rows already posted (same site, date and shift, not cancelled).
-  async function markPosted(found) {
+  // The shifts already posted (not cancelled) at these rows' sites and dates.
+  async function postedFor(found) {
     const dates = found.map((r) => r.date).filter(Boolean).sort();
-    if (!dates.length) return found;
-    const { data } = await supabase
+    if (!dates.length) return [];
+    const { data, error } = await supabase
       .from('district_notices')
-      .select('site_id, shift_date, title, start_time')
+      .select('site_id, shift_date, title, start_time, end_time, position')
       .in('site_id', [...new Set(found.map((r) => r.site_id))])
       .gte('shift_date', dates[0])
       .lte('shift_date', dates[dates.length - 1])
       .neq('status', 'cancelled');
-    return found.map((r) => {
-      const type = shiftTypes.find((t) => t.shift_type_id === r.type);
-      const already = (data ?? []).some(
-        (n) => n.site_id === r.site_id && n.shift_date === r.date &&
-          (type ? (n.title || '').toLowerCase() === type.name.toLowerCase() : n.start_time.slice(0, 5) === r.start_time),
-      );
-      return already ? { ...r, post: false, already: true } : r;
-    });
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  // Unticks rows already posted; see checkAgainstPosted.
+  async function markPosted(found) {
+    return checkAgainstPosted(found, await postedFor(found), shiftTypes);
   }
 
   async function readText() {
     setError('');
     setMessage('');
     const { vacancies, unread } = readPastedVacancies(text, typesAt(siteId), siteName(siteId));
-    setRows(await markPosted(vacancies.map((v) => makeRow(siteId, v.date, v.shiftType, v.times, v.line, positionIn(v.line)))));
+    try {
+      setRows(await markPosted(vacancies.map((v) => makeRow(siteId, v.date, v.shiftType, v.times, v.line, positionIn(v.line)))));
+    } catch (err) {
+      setError(err.message);
+      return;
+    }
     setNotes(unread.map((line) => `No date found for: ${line}`));
   }
 
@@ -126,6 +131,10 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
       all.map((r) => {
         if (r.key !== key) return r;
         const next = { ...r, ...change };
+        // Ticking an "Already posted" row back on means post it anyway.
+        if ('post' in change && change.post && r.already) next.kept = true;
+        // Changing the shift itself drops the old verdict; posting checks again.
+        if (!('post' in change)) Object.assign(next, { already: false, kept: false, repeat: false });
         const type = shiftTypes.find((t) => t.shift_type_id === change.type);
         if (type) {
           Object.assign(next, { start_time: type.start_time.slice(0, 5), end_time: type.end_time.slice(0, 5), required_skill: type.required_skill });
@@ -140,6 +149,23 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
   async function post() {
     setBusy(true);
     setError('');
+    // Check again: rows may have been changed since reading, or someone
+    // else may have posted the same shift in the meantime.
+    let checked;
+    try {
+      checked = await markPosted(rows);
+    } catch (err) {
+      setBusy(false);
+      setError(err.message);
+      return;
+    }
+    const newlyPosted = checked.filter((r) => r.already && toPost.some((t) => t.key === r.key));
+    if (newlyPosted.length) {
+      setBusy(false);
+      setRows(checked);
+      setError(`${newlyPosted.length} of these ${newlyPosted.length === 1 ? 'is' : 'are'} already posted, so ${newlyPosted.length === 1 ? 'it has' : 'they have'} been unticked. Check the list and post again, or tick ${newlyPosted.length === 1 ? 'it' : 'them'} to post anyway.`);
+      return;
+    }
     const { error } = await supabase.from('district_notices').insert(
       toPost.map((r) => {
         const type = shiftTypes.find((t) => t.shift_type_id === r.type);
@@ -248,7 +274,8 @@ export default function BulkShifts({ sites, shiftTypes, onPosted }) {
                   )}
                 </div>
                 <div className="small muted">
-                  {r.already && 'Already posted. '}
+                  {r.already && (r.kept ? 'Already posted, but posting another. ' : 'Already posted. ')}
+                  {r.repeat && 'Same as another row above: untick it unless two are needed. '}
                   {r.date && r.date < today && 'In the past. '}
                   {r.from && `From: "${r.from}"`}
                 </div>
