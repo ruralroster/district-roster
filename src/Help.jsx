@@ -120,7 +120,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           <h3>Rostering officers</h3>
           <Section title="Your Calendar" open={!isDoctor}>
             <ul>
-              <li><strong>My sites</strong> shows your sites' shifts: <strong>red</strong> days have an open shift, <strong>green</strong> ones are all filled. If you're also a district doctor, switch to <strong>Shifts for me</strong> at the top.</li>
+              <li><strong>My sites</strong> shows your sites' shifts: <strong>red</strong> days have an open shift, <strong>green</strong> ones are all filled. If you're also a district doctor, the Calendar opens on <strong>Shifts for me</strong> instead; switch between the two at the top, and your choice is remembered on that device.</li>
               <li>Tap a day to see its shifts, who's applied, and to fill, reopen or cancel them.</li>
             </ul>
           </Section>

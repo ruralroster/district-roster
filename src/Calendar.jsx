@@ -27,10 +27,19 @@ const STATUS_STYLES = {
 
 export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   const isOfficer = officerSiteIds.size > 0;
+  // An officer who's also a district doctor (staff who do the rostering)
+  // opens on Shifts for me; their last pick is remembered on this device.
   // Officers' sites load after this mounts, so the default is worked out
   // on each render rather than fixed in the initial state.
-  const [viewChoice, setView] = useState(null);
-  const view = !me ? 'officer' : !isOfficer ? 'doctor' : viewChoice ?? 'officer';
+  const viewKey = `dr-calendar-view-${districtId}`;
+  const [viewChoice, setViewChoice] = useState(() => {
+    try { return localStorage.getItem(viewKey); } catch { return null; }
+  });
+  const setView = (v) => {
+    setViewChoice(v);
+    try { localStorage.setItem(viewKey, v); } catch { /* just not remembered */ }
+  };
+  const view = !me ? 'officer' : !isOfficer ? 'doctor' : viewChoice === 'officer' ? 'officer' : 'doctor';
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()));
   // Shifts for me: every site you'd work at (DR Roster's point), or untick
   // Look across sites for your home site's only. On each time.
