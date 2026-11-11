@@ -148,21 +148,40 @@ function Home({ user }) {
       {error && <p className="error">{error}</p>}
       {loading && <p>Loading…</p>}
 
-      {me?.active && me.sites_intro_seen === false && (
+      {me?.active && me.sites_intro_seen === false && sites.length > 0 && (
         <div className="dialog-backdrop">
           <div className="dialog card stack" role="dialog" aria-modal="true" aria-labelledby="sites-intro-title">
-            <h2 id="sites-intro-title">Every site's shifts, in one place</h2>
-            <p>
-              You can see all the empty shifts at every site in {district?.name ?? 'the district'} that fit your level and
-              skills, and you'll be told about new ones.
-            </p>
-            <p>
-              To see only the sites you're happy to work at, go to <strong>My profile</strong> and choose them under{' '}
-              <strong>Sites I'd work at</strong>. You can change it at any time.
-            </p>
+            {me.interested_site_ids?.length >= sites.length ? (
+              <>
+                <h2 id="sites-intro-title">Every site's shifts, in one place</h2>
+                <p>
+                  You can see all the empty shifts at every site in {district?.name ?? 'the district'} that fit your level and
+                  skills, and you'll be told about new ones.
+                </p>
+                <p>
+                  To see only the sites you're happy to work at, go to <strong>My profile</strong> and choose them under{' '}
+                  <strong>Sites I'd work at</strong>. You can change it at any time.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 id="sites-intro-title">Work at other sites</h2>
+                <p>
+                  You're seeing empty shifts at{' '}
+                  {sites.filter((st) => me.interested_site_ids?.includes(st.site_id)).map((st) => st.name).join(', ') || 'no sites yet'}{' '}
+                  that fit your level and skills, and you'll be told about new ones.
+                </p>
+                <p>
+                  There's work at {sites.length} sites in {district?.name ?? 'the district'}. To see shifts at the others you're
+                  happy to work at, go to <strong>My profile</strong> and tick them under <strong>Sites I'd work at</strong>.
+                </p>
+              </>
+            )}
             <div className="inline">
               <button onClick={() => sitesIntroDone(true)}>Choose my sites</button>
-              <button className="secondary" onClick={() => sitesIntroDone(false)}>Keep every site</button>
+              <button className="secondary" onClick={() => sitesIntroDone(false)}>
+                {me.interested_site_ids?.length >= sites.length ? 'Keep every site' : 'Not now'}
+              </button>
             </div>
           </div>
         </div>
