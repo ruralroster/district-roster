@@ -170,7 +170,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
               <li><strong>Doctors</strong>: invite doctors, set their level, and deactivate anyone who's left.</li>
               <li>People added without a login (e.g. by the v3 import) are marked <strong>Not invited yet</strong>. Tap <strong>Invite</strong> beside one, or <strong>Invite everyone not invited yet</strong> at the top, which covers officers waiting for a login too. Anyone who already has a login (e.g. Rstar) is linked and gets the same email, telling them to sign in with their Rstar email and password instead of choosing one.</li>
               <li>Someone already on Rstar who's been added here: tap <strong>Send Rstar login email</strong> beside them. It tells them they now have DR App, that their Rstar email and password work here, and how to put it on their phone.</li>
-              <li>If an invite never arrives, or someone has forgotten their password, tap <strong>One-time password</strong> beside them. You'll see a password to email, text or tell them; it works in Rstar too. The first time they sign in with it, they choose their own password. It turns off their two-factor, which they can turn back on in My profile.</li>
+              <li>If an invite never arrives, or someone has forgotten their password, tap <strong>One-time password</strong> beside them. You'll see a password: tap <strong>Email it to them</strong> to send it from ruralroster@gmail.com, or text or tell them; it works in Rstar too. The first time they sign in with it, they choose their own password. It turns off their two-factor, which they can turn back on in My profile.</li>
             </ul>
           </Section>
         </div>

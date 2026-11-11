@@ -15,16 +15,29 @@
 // Request:  { districtId, doctorId } or { districtId, officerEmail }
 // Response: { data: { tempPassword, name, email, mfaWasReset } } | { error }
 //
+// Emailing it (the panel's "Email it to them"): sent from GMAIL_USER
+// (ruralroster@gmail.com, as the invites are), so it works on any device
+// and a copy is in that account's Sent.
+// Request:  the same, plus { emailPassword }
+// Response: { data: { emailed: true, email } } | { error }
+// Only a password in this function's own format, to someone who still has
+// to change theirs (must_reset_password), so it can't be used to email
+// anything else.
+//
 // No login yet: one is made (no email sent) and linked, as an invite would.
 // Two-factor is cleared, because Supabase won't change the password of an
 // account that has it, and someone locked out is usually locked out of that
 // too; they can turn it back on in My profile.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import nodemailer from 'npm:nodemailer@6.9.16';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const GMAIL_USER = Deno.env.get('GMAIL_USER');
+const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD');
+const APP_URL = 'https://ruralroster.github.io/district-roster/';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,7 +73,7 @@ Deno.serve(async (req) => {
     return json({ error: 'Missing Authorization header' }, 401);
   }
 
-  let body: { districtId?: string; doctorId?: string; officerEmail?: string };
+  let body: { districtId?: string; doctorId?: string; officerEmail?: string; emailPassword?: string };
   try {
     body = await req.json();
   } catch {
@@ -105,6 +118,18 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!doctor) return json({ error: 'No such doctor in this district' }, 404);
     ({ name, email, user_id: userId } = doctor);
+  } else if (body.emailPassword !== undefined) {
+    // By now they're a site officer here (their login was made when the
+    // password was).
+    const { data: officer } = await adminClient
+      .from('site_officers')
+      .select('user_id, sites!inner(district_id)')
+      .eq('sites.district_id', districtId)
+      .ilike('email', officerEmail!)
+      .limit(1);
+    if (!officer?.length) return json({ error: 'No officer with that email in this district' }, 404);
+    userId = officer[0].user_id;
+    email = officerEmail!;
   } else {
     const { data: pending } = await adminClient
       .from('site_officer_pending')
@@ -114,6 +139,21 @@ Deno.serve(async (req) => {
     if (!pending?.length) return json({ error: 'No officer waiting for a login with that email in this district' }, 404);
     name = pending.find((p) => p.name)?.name ?? null;
     email = officerEmail!;
+  }
+
+  if (body.emailPassword !== undefined) {
+    const sent = body.emailPassword;
+    if (!new RegExp(`^[${CHARS}]{10}$`).test(sent)) return json({ error: "That isn't a one-time password" }, 400);
+    if (!userId) return json({ error: 'They have no login yet' }, 400);
+    const { data: profile } = await adminClient.from('profiles').select('must_reset_password').eq('user_id', userId).maybeSingle();
+    if (!profile?.must_reset_password) return json({ error: "They've already chosen their own password" }, 409);
+    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) return json({ error: 'GMAIL_USER / GMAIL_APP_PASSWORD not set' }, 500);
+    try {
+      await sendTempPassword(email, name, sent);
+    } catch (e) {
+      return json({ error: `Email failed: ${e.message ?? e}` }, 500);
+    }
+    return json({ data: { emailed: true, email } });
   }
 
   if (!userId) {
@@ -176,3 +216,48 @@ Deno.serve(async (req) => {
 
   return json({ data: { tempPassword: password, name, email, mfaWasReset: factors.length > 0 } });
 });
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// Written like Rstar's one-time password email.
+async function sendTempPassword(to: string, name: string | null, password: string) {
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+  });
+  const firstName = (name || '').split(/\s+/).filter((w) => w && !/^(Dr|Mr|Mrs|Ms|Prof)\.?$/i.test(w))[0] || 'there';
+  const lines = [
+    `Dear ${firstName},`,
+    '',
+    'Please find below your one-time password for DR App:',
+    '',
+    password,
+    '',
+    `Sign in at ${APP_URL} using this email address as your username and the password above. If you also use Rstar, it's the same login.`,
+    '',
+    "The first time you sign in, you'll be asked to choose a new password of your own. The one-time password won't work after that.",
+    '',
+    'To put DR App on your phone like an app:',
+    '',
+    `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR App from your Home Screen from then on: phone notifications only work from there.`,
+    '',
+    `Android: open ${APP_URL} in Chrome, tap the ⋮ menu (top right), then "Install app" or "Add to Home screen".`,
+    '',
+    'Then turn on notifications in My profile, so you hear about new shifts.',
+    '',
+    "If there are any issues, or anything you'd like changed or added to the app, please don't hesitate to get in touch at ruralroster@gmail.com.",
+    '',
+    'Cheers,',
+    'Rural Roster Team',
+  ];
+  const html = lines
+    .join('\n')
+    .split('\n\n')
+    .map((para) => para === password
+      ? `<p style="font-family:monospace;font-size:20px;letter-spacing:0.08em"><strong>${escapeHtml(para)}</strong></p>`
+      : `<p>${escapeHtml(para).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+  await transporter.sendMail({ from: `"DR App" <${GMAIL_USER}>`, to, subject: 'Your DR App one-time password', text: lines.join('\n'), html });
+}

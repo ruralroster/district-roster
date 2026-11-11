@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, appUrl, LEVELS, LEVEL_LABEL } from './supabase';
-
-const APP_URL = 'https://ruralroster.github.io/district-roster/';
 import SkillPicker from './SkillPicker';
 
 const emptyInvite = { name: '', email: '', homeSiteId: '', skills: ['Emergency'] };
@@ -95,7 +93,7 @@ export default function Doctors({ districtId, sites }) {
     setBusy(false);
     const failure = error ? await functionError(error) : data?.error;
     if (failure) setBulkError(failure);
-    else setTemp(data.data);
+    else setTemp({ ...data.data, target });
     load();
   }
 
@@ -161,7 +159,7 @@ export default function Doctors({ districtId, sites }) {
         )}
         {bulkError && <p className="error">{bulkError}</p>}
         {bulkMessage && <p className="ok">{bulkMessage}</p>}
-        {temp && <TempPassword {...temp} onClose={() => setTemp(null)} />}
+        {temp && <TempPassword {...temp} districtId={districtId} onClose={() => setTemp(null)} />}
         {doctors.length === 0 && <p className="muted">No doctors yet.</p>}
         <ul className="rows">
           {doctors.map((d) => (
@@ -262,36 +260,12 @@ export default function Doctors({ districtId, sites }) {
   );
 }
 
-// Shown once: the officer passes it on. The email is written like Rstar's
-// one-time password email.
-function TempPassword({ name, email, tempPassword, mfaWasReset, onClose }) {
+// Shown once: the officer passes it on, by email from ruralroster@gmail.com
+// (district-temp-password's emailPassword), or by text or in person.
+function TempPassword({ name, email, tempPassword, mfaWasReset, target, districtId, onClose }) {
   const [copied, setCopied] = useState(false);
-  const firstName = (name || '').split(/\s+/).filter((w) => w && !/^(Dr|Mr|Mrs|Ms|Prof)\.?$/i.test(w))[0] || 'there';
-  const body = [
-    `Dear ${firstName},`,
-    '',
-    'Please find below your one-time password for DR App:',
-    '',
-    tempPassword,
-    '',
-    `Sign in at ${APP_URL} using this email address as your username and the password above. If you also use Rstar, it's the same login.`,
-    '',
-    "The first time you sign in, you'll be asked to choose a new password of your own. The one-time password won't work after that.",
-    '',
-    'To put DR App on your phone like an app:',
-    '',
-    `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR App from your Home Screen from then on: phone notifications only work from there.`,
-    '',
-    `Android: open ${APP_URL} in Chrome, tap the ⋮ menu (top right), then "Install app" or "Add to Home screen".`,
-    '',
-    'Then turn on notifications in My profile, so you hear about new shifts.',
-    '',
-    "If there are any issues, or anything you'd like changed or added to the app, please don't hesitate to get in touch at ruralroster@gmail.com.",
-    '',
-    'Cheers,',
-    'Rural Roster Team',
-  ].join('\n');
-  const mailto = `mailto:${email}?subject=${encodeURIComponent('Your DR App one-time password')}&body=${encodeURIComponent(body)}`;
+  // null, 'sending', 'sent' or an error message.
+  const [emailStatus, setEmailStatus] = useState(null);
 
   async function copy() {
     try {
@@ -302,6 +276,15 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, onClose }) {
     }
   }
 
+  async function sendEmail() {
+    setEmailStatus('sending');
+    const { data, error } = await supabase.functions.invoke('district-temp-password', {
+      body: { districtId, ...target, emailPassword: tempPassword },
+    });
+    const failure = error ? await functionError(error) : data?.error;
+    setEmailStatus(failure || 'sent');
+  }
+
   return (
     <div className="card stack">
       <p>
@@ -309,11 +292,19 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, onClose }) {
       </p>
       <p style={{ fontFamily: 'monospace', fontSize: '1.4rem', letterSpacing: '0.08em', margin: 0 }}>{tempPassword}</p>
       <p className="small muted">
-        It's shown only now. Send it by email, or by text or in person.
+        It's shown only now. Email it to them (it's sent from ruralroster@gmail.com), or text or tell them.
         {mfaWasReset && ' Their two-factor was turned off; they can turn it back on in My profile.'}
       </p>
+      {emailStatus === 'sent' && <p className="ok">Emailed to {email}.</p>}
+      {emailStatus && emailStatus !== 'sent' && emailStatus !== 'sending' && (
+        <p className="error">Couldn't send: {emailStatus}. Copy it and send it another way.</p>
+      )}
       <div className="inline">
-        <a className="button" href={mailto}>Email it to them</a>
+        {emailStatus !== 'sent' && (
+          <button onClick={sendEmail} disabled={emailStatus === 'sending'}>
+            {emailStatus === 'sending' ? 'Sending…' : 'Email it to them'}
+          </button>
+        )}
         <button className="secondary" onClick={copy}>{copied ? 'Copied' : 'Copy password'}</button>
         <button className="secondary" onClick={onClose}>Done</button>
       </div>
