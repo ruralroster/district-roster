@@ -1,10 +1,10 @@
-// district-notify: DR Roster's emails and phone notifications.
+// district-notify: DR App's emails and phone notifications.
 //
 // Run every 30 minutes (6:00-21:00 Brisbane) by pg_cron with the
 // x-cron-secret header (see migrations/2026-10-27b_notify_rules.sql). Each
 // run sends whatever's waiting, one email and one push per person; a run
 // with nothing new sends nothing:
-//   - a shift posted on DR Roster, once, straight away, to doctors who'd
+//   - a shift posted on DR App, once, straight away, to doctors who'd
 //     work at that site, at or above its level, whose skills fit, who
 //     aren't marked unavailable and are rested (10 hours either side; the
 //     rules are in SQL: district_notice_recipients). One escalated from
@@ -83,12 +83,12 @@ async function sendEmail(to: string, subject: string, intro: string, lines: stri
   const html = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #1c2730;">
 <p>${escapeHtml(intro)}</p>
 <ul>${lines.map((l) => `<li style="margin-bottom: 4px;">${escapeHtml(l)}</li>`).join('')}</ul>
-<p><a href="${APP_URL}" style="color: #1f5f8b;">Open DR Roster</a></p>
-<p style="color: #5f6d78; font-size: 12px;">You can change which emails you get in DR Roster, under My profile.</p>
+<p><a href="${APP_URL}" style="color: #1f5f8b;">Open DR App</a></p>
+<p style="color: #5f6d78; font-size: 12px;">You can change which emails you get in DR App, under My profile.</p>
 </div>`;
-  const text = [intro, '', ...lines.map((l) => `- ${l}`), '', `Open DR Roster: ${APP_URL}`].join('\n');
+  const text = [intro, '', ...lines.map((l) => `- ${l}`), '', `Open DR App: ${APP_URL}`].join('\n');
   try {
-    await transporter.sendMail({ from: `"DR Roster" <${GMAIL_USER}>`, to, subject, text, html });
+    await transporter.sendMail({ from: `"DR App" <${GMAIL_USER}>`, to, subject, text, html });
     return true;
   } catch (err) {
     console.error(`Email to ${to} failed:`, err);
@@ -133,7 +133,7 @@ async function tell(admin, person, { subject, intro, lines, pushTitle, tag }) {
 
 // ---------------------------------------------------------------------------
 
-// Shifts posted on DR Roster since the last run. Escalated ones
+// Shifts posted on DR App since the last run. Escalated ones
 // (source 'roster_app') are marked too but left for the Monday summary.
 async function newShifts(admin) {
   const { data: claimed, error } = await admin
@@ -487,9 +487,9 @@ async function doctorDigests(admin) {
 async function sendTest(admin, token: string) {
   const { data: { user } } = await admin.auth.getUser(token);
   if (!user) return json({ error: 'Not signed in' }, 401);
-  const lines = ['This is a test from DR Roster. If you can read this, notifications are working.'];
-  const emailed = await sendEmail(user.email, 'DR Roster test', 'Hi,', lines);
-  const pushed = await sendPush(admin, user.id, 'DR Roster test', lines[0], 'test');
+  const lines = ['This is a test from DR App. If you can read this, notifications are working.'];
+  const emailed = await sendEmail(user.email, 'DR App test', 'Hi,', lines);
+  const pushed = await sendPush(admin, user.id, 'DR App test', lines[0], 'test');
   return json({ data: { emailed, pushed } });
 }
 

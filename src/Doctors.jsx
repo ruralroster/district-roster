@@ -70,6 +70,20 @@ export default function Doctors({ districtId, sites }) {
     load();
   }
 
+  // Someone already on Rstar: tell them they have DR App now, and that
+  // their Rstar email and password work here.
+  async function sendRstarEmail(d) {
+    if (!window.confirm(`Email ${d.name} that they now have DR App, and can sign in with their Rstar email and password?`)) return;
+    setBusy(true);
+    setBulkError('');
+    setBulkMessage('');
+    const { data, error } = await supabase.functions.invoke('invite-district-doctor', { body: { districtId, rstarDoctorIds: [d.doctor_id] } });
+    setBusy(false);
+    const failure = error ? await functionError(error) : data?.error ?? data?.data?.results?.find((r) => r.error)?.error;
+    if (failure) setBulkError(`Couldn't email ${d.name}: ${failure}`);
+    else setBulkMessage(`Emailed ${d.email}.`);
+  }
+
   // For someone whose invite never came, or who's forgotten their password.
   async function giveTempPassword(target, label, hasLogin) {
     const rstar = hasLogin ? `${label} already has a login. If they use Rstar, they can sign in here with their Rstar email and password, and don't need a new one.\n\n` : '';
@@ -173,6 +187,11 @@ export default function Doctors({ districtId, sites }) {
                   Invite
                 </button>
               )}
+              {d.active && d.user_id && (
+                <button className="secondary" disabled={busy} onClick={() => sendRstarEmail(d)}>
+                  Send Rstar login email
+                </button>
+              )}
               {d.active && (
                 <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ doctorId: d.doctor_id }, d.name, !!d.user_id)}>
                   One-time password
@@ -251,7 +270,7 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, onClose }) {
   const body = [
     `Dear ${firstName},`,
     '',
-    'Please find below your one-time password for DR Roster:',
+    'Please find below your one-time password for DR App:',
     '',
     tempPassword,
     '',
@@ -259,9 +278,9 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, onClose }) {
     '',
     "The first time you sign in, you'll be asked to choose a new password of your own. The one-time password won't work after that.",
     '',
-    'To put DR Roster on your phone like an app:',
+    'To put DR App on your phone like an app:',
     '',
-    `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR Roster from your Home Screen from then on: phone notifications only work from there.`,
+    `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR App from your Home Screen from then on: phone notifications only work from there.`,
     '',
     `Android: open ${APP_URL} in Chrome, tap the ⋮ menu (top right), then "Install app" or "Add to Home screen".`,
     '',
@@ -272,7 +291,7 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, onClose }) {
     'Cheers,',
     'Rural Roster Team',
   ].join('\n');
-  const mailto = `mailto:${email}?subject=${encodeURIComponent('Your DR Roster one-time password')}&body=${encodeURIComponent(body)}`;
+  const mailto = `mailto:${email}?subject=${encodeURIComponent('Your DR App one-time password')}&body=${encodeURIComponent(body)}`;
 
   async function copy() {
     try {

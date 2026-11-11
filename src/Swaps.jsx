@@ -24,7 +24,7 @@ function fortnightDays(dateStr) {
   });
 }
 
-// My shifts covers this many weeks of roster-app shifts (DR Roster ones: all).
+// My shifts covers this many weeks of roster-app shifts (DR App ones: all).
 const WEEKS_AHEAD = 12;
 const addDays = (dateStr, n) => {
   const d = new Date(`${dateStr}T00:00:00`);
@@ -159,8 +159,8 @@ export default function Swaps({ districtId, sites, me, officerSiteIds }) {
       .filter((m) => !myOffers.some((o) => o.listing_id === m.listing_id && o.status === 'pending'))
       .map((m) => listings.find((l) => l.listing_id === m.listing_id))
       .filter((l) => l && notices.get(l.notice_id));
-  // Every shift I work: DR Roster bookings, and roster-app shifts at the
-  // district's sites (my primary site's roster included). A DR Roster
+  // Every shift I work: DR App bookings, and roster-app shifts at the
+  // district's sites (my primary site's roster included). A DR App
   // booking that's also on a roster-app card shows once, as the DR one.
   const siteIdByName = new Map(sites.map((s) => [s.name, s.site_id]));
   const drShifts = mine.filter((n) => n.source !== 'roster_shift');
@@ -411,7 +411,7 @@ function MyShifts({ shifts, swapsFor, otherSites, setOtherSites, today, offers, 
         </div>
       </div>
       <p className="small muted">
-        Every shift you work: DR Roster shifts you've been approved for and, if you're on Rstar, your roster there. List
+        Every shift you work: DR App shifts you've been approved for and, if you're on Rstar, your roster there. List
         one for swap if you can't do it; you still work it unless a swap is approved.
       </p>
       {shifts.length === 0 && <p className="muted">No upcoming shifts.</p>}

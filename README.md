@@ -22,5 +22,5 @@ The in-app **Help** tab (`src/Help.jsx`) explains all of this to users; keep it 
 
 ## How it ties in with roster-app
 
-- roster-app volunteering offers at a linked site that nobody local takes are escalated to DR Roster after the site's keep-local hours (`district_escalate_offers`, every 15 minutes). An approved district doctor is booked onto the roster-app card (staff booking, or a visitor marked From DR Roster).
+- roster-app volunteering offers at a linked site that nobody local takes are escalated to DR App after the site's keep-local hours (`district_escalate_offers`, every 15 minutes). An approved district doctor is booked onto the roster-app card (staff booking, or a visitor marked From DR App).
 - A doctor's roster-app shifts count for the rest rules, and a roster-app "working elsewhere" day blocks the whole day. Plain unavailable days and leave don't.

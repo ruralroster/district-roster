@@ -41,7 +41,7 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
   };
   const view = !me ? 'officer' : !isOfficer ? 'doctor' : viewChoice === 'officer' ? 'officer' : 'doctor';
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()));
-  // Shifts for me: every site you'd work at (DR Roster's point), or untick
+  // Shifts for me: every site you'd work at (DR App's point), or untick
   // Look across sites for your home site's only. On each time.
   const [acrossSites, setAcrossSites] = useState(true);
   const homeSiteId = me?.home_site_id ?? null;

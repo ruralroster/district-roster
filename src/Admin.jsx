@@ -179,7 +179,7 @@ function DeleteSite({ site, run, onClose }) {
     <div className="dialog-backdrop" onClick={onClose}>
       <div className="dialog card stack" role="dialog" aria-modal="true" aria-labelledby="delete-site-title" onClick={(e) => e.stopPropagation()}>
         <h2 id="delete-site-title">Delete {site.name}?</h2>
-        <p>This can't be undone. From DR Roster, it deletes:</p>
+        <p>This can't be undone. From DR App, it deletes:</p>
         <ul>
           <li>
             {counts ? `${counts.all} district shift${counts.all === 1 ? '' : 's'}` : 'All its district shifts'}

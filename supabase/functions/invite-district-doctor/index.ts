@@ -25,7 +25,14 @@
 //   their Rstar email and password (emailed: false if that email fails;
 //   they're still linked).
 //
-// The invite email is DR Roster's own, sent through Gmail (the project's
+//   Tell doctors already on Rstar that they now have DR App too (the
+//   Doctors tab's "Send Rstar login email")
+//     Request:  { districtId, rstarDoctorIds: [...] }
+//     Response: { data: { results: [{ email, emailed, error? }] } }
+//   Only for doctors whose login is an Rstar staff member's; anyone else
+//   gets an error back, as their password isn't an Rstar one.
+//
+// The invite email is DR App's own, sent through Gmail (the project's
 // GMAIL_USER / GMAIL_APP_PASSWORD, like district-notify), with a sign-up
 // link from Supabase (generateLink). That avoids Supabase's built-in email
 // limit of a few an hour, and its invite template, which is shared with
@@ -70,7 +77,7 @@ Deno.serve(async (req) => {
 
   let body: {
     districtId?: string; name?: string; email?: string; homeSiteId?: string; skills?: string[]; redirectTo?: string;
-    doctorIds?: string[]; officerEmails?: string[];
+    doctorIds?: string[]; officerEmails?: string[]; rstarDoctorIds?: string[];
   };
   try {
     body = await req.json();
@@ -79,7 +86,7 @@ Deno.serve(async (req) => {
   }
 
   const { districtId, homeSiteId, redirectTo } = body;
-  const inviting = Array.isArray(body.doctorIds) || Array.isArray(body.officerEmails);
+  const inviting = Array.isArray(body.doctorIds) || Array.isArray(body.officerEmails) || Array.isArray(body.rstarDoctorIds);
   const name = body.name?.trim();
   const email = body.email?.trim().toLowerCase();
   if (!districtId || (!inviting && (!name || !email))) {
@@ -108,6 +115,34 @@ Deno.serve(async (req) => {
   }
 
   const adminClient = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!);
+
+  if (Array.isArray(body.rstarDoctorIds)) {
+    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) return json({ error: 'GMAIL_USER / GMAIL_APP_PASSWORD not set' }, 500);
+    const results = [];
+    const { data: doctors } = await adminClient
+      .from('district_doctors')
+      .select('doctor_id, email, name, user_id')
+      .eq('district_id', districtId)
+      .in('doctor_id', body.rstarDoctorIds.length ? body.rstarDoctorIds : ['00000000-0000-0000-0000-000000000000']);
+    for (const d of doctors ?? []) {
+      if (!d.user_id) {
+        results.push({ email: d.email, emailed: false, error: 'no login yet; use Invite' });
+        continue;
+      }
+      const { data: onRstar } = await adminClient.from('staff').select('staff_id').eq('user_id', d.user_id).eq('active', true).limit(1);
+      if (!onRstar?.length) {
+        results.push({ email: d.email, emailed: false, error: "not on Rstar, so they don't have an Rstar password; use One-time password" });
+        continue;
+      }
+      try {
+        await sendInvite(d.email, null, d.name);
+        results.push({ email: d.email, emailed: true });
+      } catch (e) {
+        results.push({ email: d.email, emailed: false, error: e.message ?? String(e) });
+      }
+    }
+    return json({ data: { results } });
+  }
 
   if (inviting) {
     const results = [];
@@ -200,7 +235,7 @@ Deno.serve(async (req) => {
 });
 
 // The login for an email: an existing one (emailed to say their Rstar
-// password works here), or a new one with DR Roster's invite email. Makes sure the profile row exists. If the
+// password works here), or a new one with DR App's invite email. Makes sure the profile row exists. If the
 // email can't be sent, the new login is removed again, so trying later
 // starts afresh rather than finding a login nobody was told about.
 async function loginFor(adminClient, email: string, redirectTo?: string, name?: string, asOfficer = false) {
@@ -258,13 +293,13 @@ async function sendInvite(to: string, link: string | null, name?: string, asOffi
   });
   const firstName = (name || '').split(/\s+/).filter((w) => w && !/^(Dr|Mr|Mrs|Ms|Prof)\.?$/i.test(w))[0] || 'there';
   const intro = asOfficer
-    ? "You've been set up as a rostering officer on DR Roster, the district's shift board, where your site's shifts go out to doctors across the district."
-    : "You've been invited to DR Roster, the district's shift board. You'll see shifts at the sites you'd work at that fit your level, skills and roster, and can apply for them from your phone.";
-  const existing = "You can sign in to DR Roster with your Rstar email and password. You don't need a new password.";
+    ? "You've been set up as a rostering officer on DR App, the district's shift board, where your site's shifts go out to doctors across the district."
+    : "You've been invited to DR App, the district's shift board. You'll see shifts at the sites you'd work at that fit your level, skills and roster, and can apply for them from your phone.";
+  const existing = "You now have access to DR App, and you can sign in with your Rstar email and password. You don't need a new password.";
   const signIn = link
     ? `After that, sign in at ${APP_URL} using this email address as your username and the password you chose. If you already use Rstar, it's the same login.`
     : `Sign in at ${APP_URL} using this email address as your username and your Rstar password. If you've forgotten it, tap "Forgot password?" on the sign-in screen.`;
-  const iphone = `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR Roster from your Home Screen from then on: phone notifications only work from there.`;
+  const iphone = `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR App from your Home Screen from then on: phone notifications only work from there.`;
   const android = `Android: open ${APP_URL} in Chrome, tap the ⋮ menu (top right), then "Install app" or "Add to Home screen".`;
   const notify = 'Then turn on notifications in My profile, so you hear about new shifts.';
   const help = "If there are any issues, or anything you'd like changed or added to the app, please don't hesitate to get in touch at ruralroster@gmail.com.";
@@ -277,7 +312,7 @@ async function sendInvite(to: string, link: string | null, name?: string, asOffi
     ...(link ? ['Tap the link below to choose your password:', '', link, ''] : []),
     signIn,
     '',
-    'To put DR Roster on your phone like an app:',
+    'To put DR App on your phone like an app:',
     '',
     iphone,
     '',
@@ -296,12 +331,12 @@ async function sendInvite(to: string, link: string | null, name?: string, asOffi
     `<p>${escapeHtml(intro)}</p>`,
     ...(link ? [`<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#1f6fb2;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Choose your password</a></p>`] : []),
     `<p>${escapeHtml(signIn)}</p>`,
-    '<p>To put DR Roster on your phone like an app:</p>',
+    '<p>To put DR App on your phone like an app:</p>',
     `<p>${escapeHtml(iphone)}</p>`,
     `<p>${escapeHtml(android)}</p>`,
     `<p>${escapeHtml(notify)}</p>`,
     `<p>${escapeHtml(help)}</p>`,
     '<p>Cheers,<br>Rural Roster Team</p>',
   ].join('\n');
-  await transporter.sendMail({ from: `"DR Roster" <${GMAIL_USER}>`, to, subject: link ? "You're invited to DR Roster" : "You're on DR Roster: use your Rstar login", text, html });
+  await transporter.sendMail({ from: `"DR App" <${GMAIL_USER}>`, to, subject: link ? "You're invited to DR App" : "You now have DR App: use your Rstar login", text, html });
 }

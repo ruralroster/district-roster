@@ -4,8 +4,8 @@ import { supabase } from './supabase';
 
 // Phone notifications for this device (each phone or browser turns them
 // on itself), and a test. Same approach as roster-app's
-// NotificationSettings.jsx; the subscriptions are DR Roster's own
-// (district_push_subscriptions) so taps open DR Roster.
+// NotificationSettings.jsx; the subscriptions are DR App's own
+// (district_push_subscriptions) so taps open DR App.
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
@@ -121,7 +121,7 @@ export default function Notifications({ userId, intro }) {
   }
 
   const help = {
-    'ios-install': 'On iPhone, phone notifications only work once DR Roster is on your Home Screen: tap Share → Add to Home Screen, then open it from there and come back here.',
+    'ios-install': 'On iPhone, phone notifications only work once DR App is on your Home Screen: tap Share → Add to Home Screen, then open it from there and come back here.',
     unsupported: "This browser can't show phone notifications.",
     'not-configured': "Phone notifications aren't set up for this app yet.",
     'no-worker': 'Phone notifications only work in the published app.',

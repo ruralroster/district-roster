@@ -54,7 +54,7 @@ export function TwoFactorChallenge({ onVerified }) {
 
   return (
     <div className="page narrow">
-      <h1>DR Roster</h1>
+      <h1>DR App</h1>
       <form className="card stack" onSubmit={submit}>
         <h2>Enter your code</h2>
         <p className="muted small">Open your authenticator app and enter the current 6-digit code.</p>
@@ -128,7 +128,7 @@ export function TwoFactorSettings() {
   }
 
   async function turnOff() {
-    if (!window.confirm('Turn off two-factor authentication? Signing in to DR Roster and Rstar will only need your password.')) return;
+    if (!window.confirm('Turn off two-factor authentication? Signing in to DR App and Rstar will only need your password.')) return;
     setBusy(true);
     setError('');
     const { error } = await supabase.auth.mfa.unenroll({ factorId: factor.id });

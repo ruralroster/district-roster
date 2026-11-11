@@ -1,4 +1,4 @@
-// DR Roster service worker: makes the app installable and opens the last
+// DR App service worker: makes the app installable and opens the last
 // loaded version when there's no signal.
 //   - Pages: network first, so a new release shows straight away; the
 //     cached copy only when offline.
@@ -60,7 +60,7 @@ self.addEventListener('push', (event) => {
     data = { body: event.data ? event.data.text() : '' };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'DR Roster', {
+    self.registration.showNotification(data.title || 'DR App', {
       body: data.body || '',
       icon: 'icons/icon-192.png',
       badge: 'icons/icon-192.png',
@@ -70,7 +70,7 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Tapping one opens DR Roster: the open window if there is one.
+// Tapping one opens DR App: the open window if there is one.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = event.notification.data?.url || self.registration.scope;

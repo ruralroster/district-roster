@@ -116,7 +116,7 @@ function Home({ user }) {
   ].filter(Boolean);
   const activeTab = tabs.some(([k]) => k === tab) ? tab : tabs[0]?.[0];
 
-  // The first time a doctor opens DR Roster: they start out seeing every
+  // The first time a doctor opens DR App: they start out seeing every
   // site's shifts, and are pointed at My profile to narrow that down.
   async function sitesIntroDone(chooseSites) {
     setMe((m) => ({ ...m, sites_intro_seen: true }));
@@ -131,7 +131,7 @@ function Home({ user }) {
   return (
     <div className="page">
       <header className="topbar">
-        <h1>DR Roster</h1>
+        <h1>DR App</h1>
         <div className="topbar-right">
           {districts.length > 1 && (
             <select value={districtId ?? ''} onChange={(e) => setDistrictId(e.target.value)}>

@@ -32,7 +32,7 @@ export default function SignIn() {
 
   return (
     <div className="page narrow">
-      <h1>DR Roster</h1>
+      <h1>DR App</h1>
       <form className="card stack" onSubmit={signIn}>
         <label>
           Email

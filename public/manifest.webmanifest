@@ -1,6 +1,6 @@
 {
-  "name": "DR Roster",
-  "short_name": "DR Roster",
+  "name": "DR App",
+  "short_name": "DR App",
   "description": "District shifts for rural doctors",
   "start_url": "./",
   "scope": "./",
