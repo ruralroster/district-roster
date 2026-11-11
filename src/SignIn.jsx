@@ -47,7 +47,10 @@ export default function SignIn() {
         <button type="submit" disabled={busy}>Sign in</button>
         <button type="button" className="link" onClick={resetPassword} disabled={busy}>Forgot password?</button>
       </form>
-      <p className="muted small">Uses the same login as Rstar.</p>
+      <p className="muted small">
+        Already on Rstar at your site? You don't need a new password: sign in here with the same email and
+        password you use for Rstar.
+      </p>
     </div>
   );
 }

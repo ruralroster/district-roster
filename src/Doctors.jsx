@@ -40,7 +40,7 @@ export default function Doctors({ districtId, sites }) {
 
   // Invites doctors (by id) and officers (by email) already on the list.
   async function inviteExisting(doctorIds, emails, what) {
-    if (!window.confirm(`Send ${what} an invite email to set a password? Anyone who already has a login (e.g. Rstar) is linked without an email.`)) return;
+    if (!window.confirm(`Send ${what} an invite email to set a password? Anyone who already has a login (e.g. Rstar) is linked, and emailed to sign in with their Rstar password instead.`)) return;
     setBusy(true);
     setBulkError('');
     setBulkMessage('');
@@ -61,16 +61,19 @@ export default function Doctors({ districtId, sites }) {
     setBulkMessage(
       [
         invited && `${invited} invite${invited === 1 ? '' : 's'} sent.`,
-        linked && `${linked} already had a login and ${linked === 1 ? 'was' : 'were'} linked (no email).`,
+        linked && `${linked} already had a login (e.g. Rstar) and ${linked === 1 ? 'was' : 'were'} linked, and emailed to sign in with their Rstar password.`,
       ].filter(Boolean).join(' ') || 'Nobody needed an invite.',
     );
+    const notEmailed = results.filter((r) => r.linked && !r.emailed);
+    if (notEmailed.length) failed.push(...notEmailed.map((r) => ({ email: r.email, error: "linked, but the email didn't send; tell them to use their Rstar password" })));
     if (failed.length) setBulkError(`Couldn't invite: ${failed.map((r) => `${r.email} (${r.error})`).join('; ')}`);
     load();
   }
 
   // For someone whose invite never came, or who's forgotten their password.
-  async function giveTempPassword(target, label) {
-    if (!window.confirm(`Make a one-time password for ${label}? Their current password (if any) stops working straight away, and two-factor is turned off. They choose their own password when they sign in with it.`)) return;
+  async function giveTempPassword(target, label, hasLogin) {
+    const rstar = hasLogin ? `${label} already has a login. If they use Rstar, they can sign in here with their Rstar email and password, and don't need a new one.\n\n` : '';
+    if (!window.confirm(`${rstar}Make a one-time password for ${label}? Their current password (if any) stops working straight away, and two-factor is turned off. They choose their own password when they sign in with it.`)) return;
     setBusy(true);
     setBulkError('');
     setBulkMessage('');
@@ -103,7 +106,9 @@ export default function Doctors({ districtId, sites }) {
     setMessage(
       data.data.invited
         ? `Invite sent to ${invite.email}.`
-        : `${invite.email} already has a login, so they've been added without a new invite. Let them know.`,
+        : data.data.emailed
+          ? `${invite.email} already has a login (e.g. Rstar), so they've been emailed to sign in with their Rstar email and password.`
+          : `${invite.email} already has a login (e.g. Rstar), but the email didn't send. Let them know they can sign in with their Rstar email and password.`,
     );
     setInvite(emptyInvite);
     load();
@@ -169,7 +174,7 @@ export default function Doctors({ districtId, sites }) {
                 </button>
               )}
               {d.active && (
-                <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ doctorId: d.doctor_id }, d.name)}>
+                <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ doctorId: d.doctor_id }, d.name, !!d.user_id)}>
                   One-time password
                 </button>
               )}
