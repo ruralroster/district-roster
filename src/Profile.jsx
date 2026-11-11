@@ -82,7 +82,7 @@ export default function Profile({ doctor, sites, onSaved }) {
         <legend>Skills</legend>
         <SkillPicker value={form.skills} onChange={set('skills')} />
       </fieldset>
-      <fieldset>
+      <fieldset id="sites-i-work-at">
         <legend>Sites I'd work at</legend>
         <div className="checks">
           {sites.map((s) => (

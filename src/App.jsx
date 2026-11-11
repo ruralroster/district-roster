@@ -115,6 +115,17 @@ function Home({ user }) {
     ['help', 'Help'],
   ].filter(Boolean);
   const activeTab = tabs.some(([k]) => k === tab) ? tab : tabs[0]?.[0];
+
+  // The first time a doctor opens DR Roster: they start out seeing every
+  // site's shifts, and are pointed at My profile to narrow that down.
+  async function sitesIntroDone(chooseSites) {
+    setMe((m) => ({ ...m, sites_intro_seen: true }));
+    await supabase.from('district_doctors').update({ sites_intro_seen: true }).eq('doctor_id', me.doctor_id);
+    if (chooseSites) {
+      setTab('profile');
+      setTimeout(() => document.getElementById('sites-i-work-at')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    }
+  }
   const district = districts.find((d) => d.district_id === districtId);
 
   return (
@@ -136,6 +147,26 @@ function Home({ user }) {
 
       {error && <p className="error">{error}</p>}
       {loading && <p>Loading…</p>}
+
+      {me?.active && me.sites_intro_seen === false && (
+        <div className="dialog-backdrop">
+          <div className="dialog card stack" role="dialog" aria-modal="true" aria-labelledby="sites-intro-title">
+            <h2 id="sites-intro-title">Every site's shifts, in one place</h2>
+            <p>
+              You can see all the empty shifts at every site in {district?.name ?? 'the district'} that fit your level and
+              skills, and you'll be told about new ones.
+            </p>
+            <p>
+              To see only the sites you're happy to work at, go to <strong>My profile</strong> and choose them under{' '}
+              <strong>Sites I'd work at</strong>. You can change it at any time.
+            </p>
+            <div className="inline">
+              <button onClick={() => sitesIntroDone(true)}>Choose my sites</button>
+              <button className="secondary" onClick={() => sitesIntroDone(false)}>Keep every site</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!loading && tabs.length === 1 && (
         <p className="card">

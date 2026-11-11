@@ -60,7 +60,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
             <ul>
               <li><strong>Level</strong>: consultant, advanced trainee, registrar, RMO or intern. You see shifts at your level and below. An advanced trainee sees consultant shifts like a consultant.</li>
               <li><strong>Skills</strong>: Emergency (everyone), plus Anaesthetics, O&amp;G and Endoscopy. A shift that needs a skill only shows if you hold it.</li>
-              <li><strong>Sites I'd work at</strong>: you only see, and are only told about, shifts at the sites you tick.</li>
+              <li><strong>Sites I'd work at</strong>: you only see, and are only told about, shifts at the sites you tick. You start with every site in the district ticked; untick any you wouldn't go to.</li>
               <li><strong>Home site</strong>: your primary site. It matters for the rest rule below.</li>
             </ul>
           </Section>
