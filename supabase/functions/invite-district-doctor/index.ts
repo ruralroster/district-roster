@@ -37,6 +37,7 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const GMAIL_USER = Deno.env.get('GMAIL_USER');
 const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD');
+const APP_URL = 'https://ruralroster.github.io/district-roster/';
 
 const SKILLS = ['Emergency', 'Anaesthetics', 'O&G', 'Endoscopy'];
 
@@ -231,6 +232,8 @@ async function loginFor(adminClient, email: string, redirectTo?: string, name?: 
 let transporter;
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+// Written like roster-app's one-time password email (StaffAccountsTab's
+// tempPasswordMailto).
 async function sendInvite(to: string, link: string, name?: string, asOfficer = false) {
   transporter ??= nodemailer.createTransport({
     host: 'smtp.gmail.com',
@@ -238,28 +241,50 @@ async function sendInvite(to: string, link: string, name?: string, asOfficer = f
     secure: true,
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
   });
-  const hello = name ? `Hi ${name.split(/\s+/)[0]},` : 'Hi,';
-  const what = asOfficer
+  const firstName = (name || '').split(/\s+/).filter((w) => w && !/^(Dr|Mr|Mrs|Ms|Prof)\.?$/i.test(w))[0] || 'there';
+  const intro = asOfficer
     ? "You've been set up as a rostering officer on DR Roster, the district's shift board, where your site's shifts go out to doctors across the district."
     : "You've been invited to DR Roster, the district's shift board. You'll see shifts at the sites you'd work at that fit your level, skills and roster, and can apply for them from your phone.";
+  const signIn = `After that, sign in at ${APP_URL} using this email address as your username and the password you chose. If you already use Rstar, it's the same login.`;
+  const iphone = `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR Roster from your Home Screen from then on: phone notifications only work from there.`;
+  const android = `Android: open ${APP_URL} in Chrome, tap the ⋮ menu (top right), then "Install app" or "Add to Home screen".`;
+  const notify = 'Then turn on notifications in My profile, so you hear about new shifts.';
+  const help = "If there are any issues, or anything you'd like changed or added to the app, please don't hesitate to get in touch at ruralroster@gmail.com.";
   const text = [
-    hello,
+    `Dear ${firstName},`,
     '',
-    what,
+    intro,
     '',
-    'Set your password to get started:',
+    'Tap the link below to choose your password:',
+    '',
     link,
     '',
-    'Then add DR Roster to your Home Screen so it opens like an app, and turn on notifications in My profile.',
+    signIn,
     '',
-    'DR Roster',
+    'To put DR Roster on your phone like an app:',
+    '',
+    iphone,
+    '',
+    android,
+    '',
+    notify,
+    '',
+    help,
+    '',
+    'Cheers,',
+    'Rural Roster Team',
   ].join('\n');
   const html = [
-    `<p>${escapeHtml(hello)}</p>`,
-    `<p>${escapeHtml(what)}</p>`,
-    `<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#1f6fb2;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Set your password</a></p>`,
-    `<p style="color:#555;font-size:14px">Then add DR Roster to your Home Screen so it opens like an app, and turn on notifications in My profile.</p>`,
-    `<p>DR Roster</p>`,
+    `<p>Dear ${escapeHtml(firstName)},</p>`,
+    `<p>${escapeHtml(intro)}</p>`,
+    `<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#1f6fb2;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Choose your password</a></p>`,
+    `<p>${escapeHtml(signIn)}</p>`,
+    '<p>To put DR Roster on your phone like an app:</p>',
+    `<p>${escapeHtml(iphone)}</p>`,
+    `<p>${escapeHtml(android)}</p>`,
+    `<p>${escapeHtml(notify)}</p>`,
+    `<p>${escapeHtml(help)}</p>`,
+    '<p>Cheers,<br>Rural Roster Team</p>',
   ].join('\n');
   await transporter.sendMail({ from: `"DR Roster" <${GMAIL_USER}>`, to, subject: "You're invited to DR Roster", text, html });
 }

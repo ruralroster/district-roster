@@ -29,15 +29,26 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // A one-time password from an officer (here or in Rstar) also lands on
+  // Choose a password, before anything else.
   useEffect(() => {
     setNeedsCode(null);
-    if (userId) needsTwoFactor().then(setNeedsCode);
+    if (!userId) return;
+    Promise.all([needsTwoFactor(), supabase.rpc('my_must_reset_password')]).then(([code, reset]) => {
+      if (reset.data) setNeedsPassword(true);
+      setNeedsCode(code);
+    });
   }, [userId]);
+
+  async function passwordChosen() {
+    await supabase.rpc('clear_my_must_reset_password');
+    setNeedsPassword(false);
+  }
 
   if (session === undefined) return <p className="page">Loading…</p>;
   if (!session) return <SignIn />;
-  if (needsPassword) return <SetPassword onDone={() => setNeedsPassword(false)} />;
   if (needsCode === null) return <p className="page">Loading…</p>;
+  if (needsPassword) return <SetPassword onDone={passwordChosen} />;
   if (needsCode) return <TwoFactorChallenge onVerified={() => setNeedsCode(false)} />;
   return <Home user={session.user} />;
 }

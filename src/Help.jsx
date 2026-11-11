@@ -27,7 +27,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
         <h3>Everyone</h3>
         <Section title="Signing in and two-factor" open={!isDoctor && !isOfficer && !isSuperAdmin}>
           <ul>
-            <li>You're invited by email: the link takes you to a page to set your password. If you already use Rstar, it's the same login and password.</li>
+            <li>You're invited by email: the link takes you to a page to set your password. If you already use Rstar, it's the same login and password. If the email never comes, or you forget your password, your officer can give you a one-time password.</li>
             <li>Two-factor (a 6-digit code from an authenticator app) is under <strong>My profile</strong> or <strong>My account</strong>. It's the same setting as Rstar, so turning it on in one turns it on in both.</li>
             <li>Forgotten your password? Use <strong>Forgot password</strong> on the sign-in page.</li>
           </ul>
@@ -169,6 +169,7 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
               <li><strong>Sites</strong>: add and remove each site's shift types, choose its colour, and set how long gaps stay local before coming here.</li>
               <li><strong>Doctors</strong>: invite doctors, set their level, and deactivate anyone who's left.</li>
               <li>People added without a login (e.g. by the v3 import) are marked <strong>Not invited yet</strong>. Tap <strong>Invite</strong> beside one, or <strong>Invite everyone not invited yet</strong> at the top, which covers officers waiting for a login too. Anyone who already has a login (e.g. Rstar) is linked without an email.</li>
+              <li>If an invite never arrives, or someone has forgotten their password, tap <strong>One-time password</strong> beside them. You'll see a password to email, text or tell them; it works in Rstar too. The first time they sign in with it, they choose their own password. It turns off their two-factor, which they can turn back on in My profile.</li>
             </ul>
           </Section>
         </div>

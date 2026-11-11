@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, appUrl, LEVELS, LEVEL_LABEL } from './supabase';
+
+const APP_URL = 'https://ruralroster.github.io/district-roster/';
 import SkillPicker from './SkillPicker';
 
 const emptyInvite = { name: '', email: '', homeSiteId: '', skills: ['Emergency'] };
@@ -14,6 +16,8 @@ export default function Doctors({ districtId, sites }) {
   const [pendingOfficers, setPendingOfficers] = useState([]);
   const [bulkMessage, setBulkMessage] = useState('');
   const [bulkError, setBulkError] = useState('');
+  // The one-time password just made: { name, email, tempPassword, mfaWasReset }.
+  const [temp, setTemp] = useState(null);
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
 
   const load = useCallback(async () => {
@@ -61,6 +65,20 @@ export default function Doctors({ districtId, sites }) {
       ].filter(Boolean).join(' ') || 'Nobody needed an invite.',
     );
     if (failed.length) setBulkError(`Couldn't invite: ${failed.map((r) => `${r.email} (${r.error})`).join('; ')}`);
+    load();
+  }
+
+  // For someone whose invite never came, or who's forgotten their password.
+  async function giveTempPassword(target, label) {
+    if (!window.confirm(`Make a one-time password for ${label}? Their current password (if any) stops working straight away, and two-factor is turned off. They choose their own password when they sign in with it.`)) return;
+    setBusy(true);
+    setBulkError('');
+    setBulkMessage('');
+    const { data, error } = await supabase.functions.invoke('district-temp-password', { body: { districtId, ...target } });
+    setBusy(false);
+    const failure = error ? await functionError(error) : data?.error;
+    if (failure) setBulkError(failure);
+    else setTemp(data.data);
     load();
   }
 
@@ -124,6 +142,7 @@ export default function Doctors({ districtId, sites }) {
         )}
         {bulkError && <p className="error">{bulkError}</p>}
         {bulkMessage && <p className="ok">{bulkMessage}</p>}
+        {temp && <TempPassword {...temp} onClose={() => setTemp(null)} />}
         {doctors.length === 0 && <p className="muted">No doctors yet.</p>}
         <ul className="rows">
           {doctors.map((d) => (
@@ -149,6 +168,11 @@ export default function Doctors({ districtId, sites }) {
                   Invite
                 </button>
               )}
+              {d.active && (
+                <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ doctorId: d.doctor_id }, d.name)}>
+                  One-time password
+                </button>
+              )}
               <button className="secondary" onClick={() => setActive(d, !d.active)}>
                 {d.active ? 'Deactivate' : 'Reactivate'}
               </button>
@@ -172,6 +196,9 @@ export default function Doctors({ districtId, sites }) {
                   </div>
                   <button className="secondary" disabled={busy} onClick={() => inviteExisting([], [email], rows.find((o) => o.name)?.name ?? email)}>
                     Invite
+                  </button>
+                  <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ officerEmail: email }, rows.find((o) => o.name)?.name ?? email)}>
+                    One-time password
                   </button>
                 </li>
               );
@@ -207,6 +234,65 @@ export default function Doctors({ districtId, sites }) {
         {message && <p className="ok">{message}</p>}
         <button type="submit" disabled={busy}>Send invite</button>
       </form>
+    </div>
+  );
+}
+
+// Shown once: the officer passes it on. The email is written like Rstar's
+// one-time password email.
+function TempPassword({ name, email, tempPassword, mfaWasReset, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const firstName = (name || '').split(/\s+/).filter((w) => w && !/^(Dr|Mr|Mrs|Ms|Prof)\.?$/i.test(w))[0] || 'there';
+  const body = [
+    `Dear ${firstName},`,
+    '',
+    'Please find below your one-time password for DR Roster:',
+    '',
+    tempPassword,
+    '',
+    `Sign in at ${APP_URL} using this email address as your username and the password above. If you also use Rstar, it's the same login.`,
+    '',
+    "The first time you sign in, you'll be asked to choose a new password of your own. The one-time password won't work after that.",
+    '',
+    'To put DR Roster on your phone like an app:',
+    '',
+    `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR Roster from your Home Screen from then on: phone notifications only work from there.`,
+    '',
+    `Android: open ${APP_URL} in Chrome, tap the ⋮ menu (top right), then "Install app" or "Add to Home screen".`,
+    '',
+    'Then turn on notifications in My profile, so you hear about new shifts.',
+    '',
+    "If there are any issues, or anything you'd like changed or added to the app, please don't hesitate to get in touch at ruralroster@gmail.com.",
+    '',
+    'Cheers,',
+    'Rural Roster Team',
+  ].join('\n');
+  const mailto = `mailto:${email}?subject=${encodeURIComponent('Your DR Roster one-time password')}&body=${encodeURIComponent(body)}`;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(tempPassword);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="card stack">
+      <p>
+        One-time password for <strong>{name ?? email}</strong> ({email}):
+      </p>
+      <p style={{ fontFamily: 'monospace', fontSize: '1.4rem', letterSpacing: '0.08em', margin: 0 }}>{tempPassword}</p>
+      <p className="small muted">
+        It's shown only now. Send it by email, or by text or in person.
+        {mfaWasReset && ' Their two-factor was turned off; they can turn it back on in My profile.'}
+      </p>
+      <div className="inline">
+        <a className="button" href={mailto}>Email it to them</a>
+        <button className="secondary" onClick={copy}>{copied ? 'Copied' : 'Copy password'}</button>
+        <button className="secondary" onClick={onClose}>Done</button>
+      </div>
     </div>
   );
 }

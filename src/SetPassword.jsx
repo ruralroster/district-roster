@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { supabase } from './supabase';
 
-// Shown after following an invite or password-reset email.
+// Shown after following an invite or password-reset email, or signing in
+// with a one-time password.
 export default function SetPassword({ onDone }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
