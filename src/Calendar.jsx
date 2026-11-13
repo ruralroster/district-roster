@@ -211,6 +211,10 @@ export default function Calendar({ districtId, sites, me, officerSiteIds }) {
         </div>
       )}
 
+      {view === 'officer' && (
+        <OutcomesNeeded districtId={districtId} officerSiteIds={officerSiteIds} sites={sites} doctors={doctors} onChanged={load} />
+      )}
+
       {view === 'doctor' && homeSiteId && (
         <label className="check">
           <input type="checkbox" checked={acrossSites} onChange={(e) => setAcrossSites(e.target.checked)} />
@@ -455,8 +459,9 @@ function DayPanel({ date, notices, applications, availability, unavailable, dayI
 
 // Doctor: apply (with an optional note), see where it's up to, withdraw.
 const CANCEL_REASONS = [
+  ['rostered_locally', 'A local doctor has been rostered on Rstar'],
   ['agency', 'An agency or locum is doing it'],
-  ['outside_app', 'Filled some other way (e.g. by phone)'],
+  ['outside_app', 'Filled some other way'],
   ['not_needed', 'No longer needed'],
   ['service_closed', 'The service is closing for it'],
 ];
@@ -483,11 +488,109 @@ function CancelShift({ notice, siteName, onCancel, onClose }) {
             ))}
           </div>
         </fieldset>
+        <p className="small muted">A doctor on DR App doing it? Use Mark filled by instead, so it counts as filled.</p>
         <div className="inline">
           <button className="danger-fill" disabled={!reason} onClick={() => onCancel(reason)}>Cancel shift</button>
           <button className="secondary" onClick={onClose}>Keep it</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// What happened to a shift that started while still open, for Insights:
+// who did it, or why nobody did (record_shift_outcome). Nobody's emailed.
+const OUTCOMES = [
+  ['rostered_locally', 'A local doctor was rostered on Rstar'],
+  ['agency', 'An agency or locum did it'],
+  ['outside_app', 'Filled some other way'],
+  ['went_unfilled', 'Nobody covered it: we ran short'],
+  ['service_closed', 'The service closed'],
+  ['not_needed', "It wasn't needed after all"],
+];
+
+// Shifts up to this many days back are asked about.
+const OUTCOME_LOOKBACK_DAYS = 60;
+
+function OutcomesNeeded({ districtId, officerSiteIds, sites, doctors, onChanged }) {
+  const [shifts, setShifts] = useState([]);
+  const [choice, setChoice] = useState({});
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    const from = new Date();
+    from.setDate(from.getDate() - OUTCOME_LOOKBACK_DAYS);
+    const { data, error } = await supabase
+      .from('district_notices')
+      .select('notice_id, site_id, shift_date, start_time, end_time, title')
+      .eq('district_id', districtId)
+      .eq('status', 'open')
+      .neq('source', 'roster_shift')
+      .in('site_id', [...officerSiteIds])
+      .gte('shift_date', toLocalDateStr(from))
+      .lte('shift_date', toLocalDateStr(new Date()))
+      .order('shift_date')
+      .order('start_time');
+    if (error) setError(error.message);
+    const now = new Date();
+    setShifts((data ?? []).filter((n) => new Date(`${n.shift_date}T${n.start_time}`) <= now));
+  }, [districtId, officerSiteIds]);
+
+  useEffect(() => {
+    if (officerSiteIds.size) load();
+  }, [load, officerSiteIds]);
+
+  async function record(n) {
+    const value = choice[n.notice_id];
+    setError('');
+    const [outcome, doctorId] = value.startsWith('doctor:') ? ['filled', value.slice(7)] : [value, null];
+    const { error } = await supabase.rpc('record_shift_outcome', { p_notice_id: n.notice_id, p_outcome: outcome, p_doctor_id: doctorId });
+    if (error) return setError(error.message);
+    load();
+    onChanged();
+  }
+
+  if (!shifts.length) return null;
+  const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
+  return (
+    <div className="card stack">
+      <h2>What happened to these shifts?</h2>
+      <p className="small muted">
+        They started while still open. Say who did each one, or why nobody did: Insights counts every vacancy, so an
+        unanswered one can't show as filled. Nobody is emailed.
+      </p>
+      <ul className="rows">
+        {shifts.map((n) => (
+          <li key={n.notice_id} className="row">
+            <div>
+              <strong>{siteName(n.site_id)}</strong>{' '}
+              {new Date(`${n.shift_date}T00:00`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}{' '}
+              {n.title && `${n.title} `}{formatShiftTime(n.start_time, n.end_time)}
+            </div>
+            <div className="inline">
+              <select
+                value={choice[n.notice_id] ?? ''}
+                onChange={(e) => setChoice((c) => ({ ...c, [n.notice_id]: e.target.value }))}
+                aria-label="What happened"
+              >
+                <option value="">What happened…</option>
+                <optgroup label="Done by a doctor on DR App">
+                  {doctors.map((d) => (
+                    <option key={d.doctor_id} value={`doctor:${d.doctor_id}`}>{d.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Otherwise">
+                  {OUTCOMES.map(([k, label]) => (
+                    <option key={k} value={k}>{label}</option>
+                  ))}
+                </optgroup>
+              </select>
+              <button disabled={!choice[n.notice_id]} onClick={() => record(n)}>Save</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }
