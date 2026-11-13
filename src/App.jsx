@@ -11,6 +11,7 @@ import DigestSettings from './DigestSettings';
 import Admin from './Admin';
 import Notifications from './Notifications';
 import Calendar from './Calendar';
+import Insights from './Insights';
 import { needsTwoFactor, TwoFactorChallenge, TwoFactorSettings } from './TwoFactor';
 
 export default function App() {
@@ -110,6 +111,7 @@ function Home({ user }) {
     (me || officerSiteIds.size > 0) && ['swaps', 'Swaps'],
     (me || officerSiteIds.size > 0 || isSuperAdmin) && ['profile', me ? 'My profile' : 'My account'],
     isOfficer && ['doctors', 'Doctors'],
+    isOfficer && ['insights', 'Insights'],
     officerSiteIds.size > 0 && ['sites', 'Sites'],
     isSuperAdmin && ['admin', 'Admin'],
     ['help', 'Help'],
@@ -220,6 +222,7 @@ function Home({ user }) {
         </div>
       )}
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}
+      {activeTab === 'insights' && <Insights districtId={districtId} districtName={district?.name} />}
       {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} officerSiteIds={officerSiteIds} onChanged={reload} />}
       {activeTab === 'admin' && <Admin districts={districts} onChanged={reload} />}
       {activeTab === 'swaps' && <Swaps districtId={districtId} sites={sites} me={me} officerSiteIds={officerSiteIds} />}

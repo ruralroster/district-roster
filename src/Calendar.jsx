@@ -337,6 +337,8 @@ function DayPanel({ date, notices, applications, availability, unavailable, dayI
     return toLocalDateStr(d);
   })();
   const [error, setError] = useState('');
+  // The shift whose Cancel was tapped: asks why first (for Insights).
+  const [cancelling, setCancelling] = useState(null);
   const hues = siteHues(sites);
   const siteName = (id) => sites.find((s) => s.site_id === id)?.name ?? '';
   const doctorName = (id) => doctors.find((d) => d.doctor_id === id)?.name ?? (id === me?.doctor_id ? 'You' : 'A district doctor');
@@ -410,10 +412,7 @@ function DayPanel({ date, notices, applications, availability, unavailable, dayI
                 ) : (
                   <button className="secondary" onClick={() => update(n, { status: 'open', filled_by_doctor_id: null })}>Reopen</button>
                 )}
-                <button
-                  className="link danger"
-                  onClick={() => window.confirm('Cancel this shift?') && update(n, { status: 'cancelled' })}
-                >
+                <button className="link danger" onClick={() => setCancelling(n)}>
                   Cancel
                 </button>
               </div>
@@ -421,6 +420,17 @@ function DayPanel({ date, notices, applications, availability, unavailable, dayI
           </li>
         ))}
       </ul>
+      {cancelling && (
+        <CancelShift
+          notice={cancelling}
+          siteName={siteName(cancelling.site_id)}
+          onCancel={(reason) => {
+            update(cancelling, { status: 'cancelled', cancel_reason: reason });
+            setCancelling(null);
+          }}
+          onClose={() => setCancelling(null)}
+        />
+      )}
       {view === 'doctor' && dayInfo?.working && <p className="small">Working: {dayInfo.working}</p>}
       {view === 'doctor' && dayInfo?.on_leave && (
         <p className="small">{dayInfo.on_leave}: district shifts are still open to you.</p>
@@ -444,6 +454,44 @@ function DayPanel({ date, notices, applications, availability, unavailable, dayI
 }
 
 // Doctor: apply (with an optional note), see where it's up to, withdraw.
+const CANCEL_REASONS = [
+  ['agency', 'An agency or locum is doing it'],
+  ['outside_app', 'Filled some other way (e.g. by phone)'],
+  ['not_needed', 'No longer needed'],
+  ['service_closed', 'The service is closing for it'],
+];
+
+// Why a shift is being cancelled: Insights counts each reason, so an LHD can
+// see what went to agency or closed a service.
+function CancelShift({ notice, siteName, onCancel, onClose }) {
+  const [reason, setReason] = useState('');
+  return (
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div className="dialog card stack" role="dialog" aria-modal="true" aria-labelledby="cancel-shift-title" onClick={(e) => e.stopPropagation()}>
+        <h2 id="cancel-shift-title">Cancel this shift?</h2>
+        <p className="small muted">
+          {siteName} · {notice.title ? `${notice.title} ` : ''}{formatShiftTime(notice.start_time, notice.end_time)}
+        </p>
+        <fieldset>
+          <legend>Why?</legend>
+          <div className="stack">
+            {CANCEL_REASONS.map(([key, label]) => (
+              <label key={key} className="check">
+                <input type="radio" name="cancel-reason" value={key} checked={reason === key} onChange={() => setReason(key)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div className="inline">
+          <button className="danger-fill" disabled={!reason} onClick={() => onCancel(reason)}>Cancel shift</button>
+          <button className="secondary" onClick={onClose}>Keep it</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MyApplication({ notice, me, applications, problem, rpc }) {
   const [applying, setApplying] = useState(false);
   const [note, setNote] = useState('');
