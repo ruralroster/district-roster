@@ -83,10 +83,11 @@ REVOKE EXECUTE ON FUNCTION district_escalation_taken(uuid) FROM PUBLIC, anon, au
 -- The 15-minute sync says which it was when it cancels the district shift.
 DO $$
 DECLARE
-  v_old text := $q$SET status = 'cancelled', notes = concat_ws(' · ', notes, 'Covered or withdrawn on roster-app')$q$;
+  -- (2026-11-04/06 reworded roster-app to Rstar in the note.)
+  v_old text := $q$SET status = 'cancelled', notes = concat_ws(' · ', notes, 'Covered or withdrawn on Rstar')$q$;
   v_new text := $q$SET status = 'cancelled',
         cancel_reason = CASE WHEN district_escalation_taken(v_row.volunteer_offer_id) THEN 'covered_locally' ELSE 'withdrawn' END,
-        notes = concat_ws(' · ', notes, 'Covered or withdrawn on roster-app')$q$;
+        notes = concat_ws(' · ', notes, 'Covered or withdrawn on Rstar')$q$;
   v_def text := pg_get_functiondef('district_escalate_offers()'::regprocedure);
 BEGIN
   IF position('district_escalation_taken' IN v_def) > 0 THEN
@@ -98,11 +99,14 @@ BEGIN
   END IF;
 END $$;
 
--- Ones already cancelled.
+-- Ones already cancelled by the sync. (2026-11-13_insights.sql looked for
+-- the old roster-app wording, so these were left without a reason.)
 UPDATE district_notices n
 SET cancel_reason = CASE WHEN district_escalation_taken(e.volunteer_offer_id) THEN 'covered_locally' ELSE 'withdrawn' END
 FROM district_escalations e
-WHERE e.notice_id = n.notice_id AND n.status = 'cancelled' AND n.cancel_reason = 'covered_locally';
+WHERE e.notice_id = n.notice_id AND n.status = 'cancelled'
+  AND (n.cancel_reason = 'covered_locally' OR n.cancel_reason IS NULL)
+  AND n.notes ~ 'Covered or withdrawn on (roster-app|Rostar|Rstar)';
 
 -- ---------------------------------------------------------------------------
 -- What happened to a shift that started while still open.
