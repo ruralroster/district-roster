@@ -2,14 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase, appUrl, LEVELS, LEVEL_LABEL } from './supabase';
 import SkillPicker from './SkillPicker';
 
+// "Yarrabah", "Yarrabah and Atherton", "Atherton, Mareeba and Yarrabah".
+const listOf = (names) => (names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+
 const emptyInvite = { name: '', email: '', homeSiteId: '', skills: ['Emergency'] };
 
 export default function Doctors({ districtId, sites }) {
   const [doctors, setDoctors] = useState([]);
   const [invite, setInvite] = useState(emptyInvite);
-  const [officerInvite, setOfficerInvite] = useState({ name: '', email: '', siteId: '' });
+  const [officerInvite, setOfficerInvite] = useState({ name: '', email: '', siteIds: [] });
   const [officerError, setOfficerError] = useState('');
   const [officerMessage, setOfficerMessage] = useState('');
+  // Add site beside an officer: { email, pending, siteId } while it's open.
+  const [addingSite, setAddingSite] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -116,12 +121,21 @@ export default function Doctors({ districtId, sites }) {
   // officer (not a doctor), so they only see the officer side.
   async function sendOfficerInvite(e) {
     e.preventDefault();
-    const { name, siteId } = officerInvite;
+    const { name, siteIds } = officerInvite;
     const email = officerInvite.email.trim().toLowerCase();
+    if (!siteIds.length) {
+      setOfficerError('Tick at least one site.');
+      return;
+    }
+    const where = listOf(siteIds.map(siteName));
     setBusy(true);
     setOfficerError('');
     setOfficerMessage('');
-    const { error: addError } = await supabase.rpc('add_pending_site_officer', { p_site_id: siteId, p_email: email, p_name: name });
+    let addError = null;
+    for (const siteId of siteIds) {
+      ({ error: addError } = await supabase.rpc('add_pending_site_officer', { p_site_id: siteId, p_email: email, p_name: name }));
+      if (addError) break;
+    }
     if (addError) {
       setBusy(false);
       setOfficerError(addError.message);
@@ -139,11 +153,58 @@ export default function Doctors({ districtId, sites }) {
     }
     const r = data?.data?.results?.[0];
     setOfficerMessage(r?.invited
-      ? `Invite sent to ${email}. They become an officer of ${siteName(siteId)} once they've set their password.`
-      : `${email} already had a login (e.g. Rstar), so they're now an officer of ${siteName(siteId)}${r?.emailed ? ' and have been emailed to sign in with it' : ", but the email didn't send: tell them to sign in with their Rstar email and password"}.`);
-    setOfficerInvite({ name: '', email: '', siteId: '' });
+      ? `Invite sent to ${email}. They become an officer of ${where} once they've set their password.`
+      : `${email} already had a login (e.g. Rstar), so they're now an officer of ${where}${r?.emailed ? ' and have been emailed to sign in with it' : ", but the email didn't send: tell them to sign in with their Rstar email and password"}.`);
+    setOfficerInvite({ name: '', email: '', siteIds: [] });
     load();
   }
+
+  // Another site for an officer: straight away for one with a login (no
+  // email), or added to the invite of one not invited yet.
+  async function addSite() {
+    const { email, pending, siteId } = addingSite;
+    if (!siteId) return;
+    setBusy(true);
+    setBulkError('');
+    setBulkMessage('');
+    const { error } = pending
+      ? await supabase.rpc('add_pending_site_officer', { p_site_id: siteId, p_email: email, p_name: null })
+      : await supabase.rpc('add_officer_site', { p_site_id: siteId, p_email: email });
+    setBusy(false);
+    if (error) {
+      setBulkError(error.message);
+      return;
+    }
+    setBulkMessage(pending
+      ? `${siteName(siteId)} added: ${email} becomes its officer when they've been invited and signed up.`
+      : `${email} is now an officer of ${siteName(siteId)} too. Nobody was emailed.`);
+    setAddingSite(null);
+    load();
+  }
+
+  // The Add site button, or the site picker once it's tapped. haveSites:
+  // the sites they're already officer of.
+  const addSiteControl = (email, pending, haveSites) => {
+    const others = sites.filter((st) => !haveSites.includes(st.site_id));
+    if (!others.length) return null;
+    if (addingSite?.email !== email) {
+      return (
+        <button className="secondary" disabled={busy} onClick={() => setAddingSite({ email, pending, siteId: '' })}>
+          Add site
+        </button>
+      );
+    }
+    return (
+      <span className="inline">
+        <select value={addingSite.siteId} onChange={(e) => setAddingSite({ ...addingSite, siteId: e.target.value })} aria-label={`Site to add for ${email}`}>
+          <option value="">Pick a site</option>
+          {others.map((st) => <option key={st.site_id} value={st.site_id}>{st.name}</option>)}
+        </select>
+        <button disabled={busy || !addingSite.siteId} onClick={addSite}>Add</button>
+        <button className="secondary" onClick={() => setAddingSite(null)}>Cancel</button>
+      </span>
+    );
+  };
 
   async function sendInvite(e) {
     e.preventDefault();
@@ -262,6 +323,7 @@ export default function Doctors({ districtId, sites }) {
                   <strong>{email}</strong>
                   <div className="muted small">{officers.filter((o) => o.email === email).map((o) => siteName(o.site_id)).join(', ')}</div>
                 </div>
+                {addSiteControl(email, false, officers.filter((o) => o.email === email).map((o) => o.site_id))}
               </li>
             ))}
           </ul>
@@ -285,6 +347,7 @@ export default function Doctors({ districtId, sites }) {
                     <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ officerEmail: email }, rows.find((o) => o.name)?.name ?? email)}>
                       One-time password
                     </button>
+                    {addSiteControl(email, true, rows.map((o) => o.site_id))}
                   </li>
                 );
               })}
@@ -322,7 +385,7 @@ export default function Doctors({ districtId, sites }) {
       </form>
       <form className="card stack" onSubmit={sendOfficerInvite}>
         <h2>Invite an officer</h2>
-        <p className="small muted">A rostering officer for a site. They get the officer side only (Calendar, Swaps, Staff, Insights, Sites), not a doctor's, and aren't on the doctors list.</p>
+        <p className="small muted">A rostering officer for one or more sites. They get the officer side only (Calendar, Swaps, Staff, Insights, Sites), not a doctor's, and aren't on the doctors list.</p>
         <label>
           Name
           <input value={officerInvite.name} onChange={(e) => setOfficerInvite({ ...officerInvite, name: e.target.value })} required />
@@ -331,15 +394,26 @@ export default function Doctors({ districtId, sites }) {
           Email
           <input type="email" value={officerInvite.email} onChange={(e) => setOfficerInvite({ ...officerInvite, email: e.target.value })} required />
         </label>
-        <label>
-          Site
-          <select value={officerInvite.siteId} onChange={(e) => setOfficerInvite({ ...officerInvite, siteId: e.target.value })} required>
-            <option value="">Pick a site</option>
-            {sites.map((s) => (
-              <option key={s.site_id} value={s.site_id}>{s.name}</option>
+        <fieldset>
+          <legend>Officer for</legend>
+          <div className="checks">
+            {sites.map((st) => (
+              <label key={st.site_id} className="check">
+                <input
+                  type="checkbox"
+                  checked={officerInvite.siteIds.includes(st.site_id)}
+                  onChange={(e) => setOfficerInvite({
+                    ...officerInvite,
+                    siteIds: e.target.checked
+                      ? [...officerInvite.siteIds, st.site_id]
+                      : officerInvite.siteIds.filter((id) => id !== st.site_id),
+                  })}
+                />
+                {st.name}
+              </label>
             ))}
-          </select>
-        </label>
+          </div>
+        </fieldset>
         {officerError && <p className="error">{officerError}</p>}
         {officerMessage && <p className="ok">{officerMessage}</p>}
         <button type="submit" disabled={busy}>Send officer invite</button>

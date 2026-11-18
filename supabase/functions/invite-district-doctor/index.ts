@@ -169,14 +169,15 @@ Deno.serve(async (req) => {
     const { data: pending } = emails.length
       ? await adminClient
         .from('site_officer_pending')
-        .select('site_id, email, name, sites!inner(district_id)')
+        .select('site_id, email, name, sites!inner(district_id, name)')
         .eq('sites.district_id', districtId)
         .in('email', emails)
       : { data: [] };
     for (const officerEmail of [...new Set((pending ?? []).map((p) => p.email))]) {
       try {
         const officerName = (pending ?? []).find((x) => x.email === officerEmail && x.name)?.name;
-        const { userId, invited, emailed } = await loginFor(adminClient, officerEmail, redirectTo, officerName, true);
+        const siteNames = (pending ?? []).filter((x) => x.email === officerEmail).map((x) => x.sites?.name).filter(Boolean).sort();
+        const { userId, invited, emailed } = await loginFor(adminClient, officerEmail, redirectTo, officerName, siteNames);
         if (!invited) {
           // Their profile already existed, so the claim trigger won't fire.
           for (const p of (pending ?? []).filter((x) => x.email === officerEmail)) {
@@ -238,7 +239,8 @@ Deno.serve(async (req) => {
 // password works here), or a new one with DR App's invite email. Makes sure the profile row exists. If the
 // email can't be sent, the new login is removed again, so trying later
 // starts afresh rather than finding a login nobody was told about.
-async function loginFor(adminClient, email: string, redirectTo?: string, name?: string, asOfficer = false) {
+// officerSites: invited as an officer of these sites (names), not a doctor.
+async function loginFor(adminClient, email: string, redirectTo?: string, name?: string, officerSites?: string[]) {
   const { data: existingProfile } = await adminClient
     .from('profiles')
     .select('user_id')
@@ -248,7 +250,7 @@ async function loginFor(adminClient, email: string, redirectTo?: string, name?: 
     let emailed = false;
     if (GMAIL_USER && GMAIL_APP_PASSWORD) {
       try {
-        await sendInvite(email, null, name, asOfficer);
+        await sendInvite(email, null, name, officerSites);
         emailed = true;
       } catch (e) {
         console.error(`Welcome email to ${email} failed:`, e);
@@ -267,7 +269,7 @@ async function loginFor(adminClient, email: string, redirectTo?: string, name?: 
   const userId = link.user.id;
 
   try {
-    await sendInvite(email, link.properties.action_link, name, asOfficer);
+    await sendInvite(email, link.properties.action_link, name, officerSites);
   } catch (e) {
     await adminClient.auth.admin.deleteUser(userId).catch(() => {});
     throw new Error(`Invite email failed: ${e.message ?? e}`);
@@ -284,7 +286,11 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 // Written like roster-app's one-time password email (StaffAccountsTab's
 // tempPasswordMailto). No link: they already have a login (Rstar), so it
 // says to sign in with that instead of choosing a password.
-async function sendInvite(to: string, link: string | null, name?: string, asOfficer = false) {
+// "Yarrabah", "Yarrabah and Atherton", "Atherton, Mareeba and Yarrabah".
+const listOf = (names: string[]) => (names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+
+async function sendInvite(to: string, link: string | null, name?: string, officerSites?: string[]) {
+  const asOfficer = !!officerSites;
   transporter ??= nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
@@ -292,8 +298,9 @@ async function sendInvite(to: string, link: string | null, name?: string, asOffi
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
   });
   const firstName = (name || '').split(/\s+/).filter((w) => w && !/^(Dr|Mr|Mrs|Ms|Prof)\.?$/i.test(w))[0] || 'there';
+  const where = officerSites?.length ? ` for ${listOf(officerSites)}` : '';
   const intro = asOfficer
-    ? "You've been set up as a rostering officer on DR App, the district's shift board, where your site's shifts go out to doctors across the district."
+    ? `You've been set up as a rostering officer${where} on DR App, the district's shift board, where your ${(officerSites?.length ?? 0) > 1 ? "sites'" : "site's"} shifts go out to doctors across the district.`
     : "You've been invited to DR App, the district's shift board. You'll see shifts at the sites you'd work at that fit your level, skills and roster, and can apply for them from your phone.";
   const existing = "You now have access to DR App, and you can sign in with your Rstar email and password. You don't need a new password.";
   const signIn = link
@@ -301,7 +308,12 @@ async function sendInvite(to: string, link: string | null, name?: string, asOffi
     : `Sign in at ${APP_URL} using this email address as your username and your Rstar password. If you've forgotten it, tap "Forgot password?" on the sign-in screen.`;
   const iphone = `iPhone: open ${APP_URL} in Safari (not Chrome or the Gmail browser), tap the Share button (the square with an arrow), then "Add to Home Screen" and "Add". Open DR App from your Home Screen from then on: phone notifications only work from there.`;
   const android = `Android: open ${APP_URL} in Chrome, tap the ⋮ menu (top right), then "Install app" or "Add to Home screen".`;
-  const notify = 'Then turn on notifications in My profile, so you hear about new shifts.';
+  const notify = asOfficer
+    ? 'Then turn on notifications in My account, so you hear when doctors apply for or withdraw from your shifts, when a swap needs approving, and when a shift is still open with under 72 hours to go.'
+    : 'Then turn on notifications in My profile, so you hear about new shifts.';
+  const guide = asOfficer
+    ? "The Help tab in DR App walks you through posting shifts, choosing who gets them, recording what happened to a shift and approving swaps."
+    : null;
   const help = "If there are any issues, or anything you'd like changed or added to the app, please don't hesitate to get in touch at ruralroster@gmail.com.";
   const text = [
     `Dear ${firstName},`,
@@ -320,6 +332,7 @@ async function sendInvite(to: string, link: string | null, name?: string, asOffi
     '',
     notify,
     '',
+    ...(guide ? [guide, ''] : []),
     help,
     '',
     'Cheers,',
@@ -335,6 +348,7 @@ async function sendInvite(to: string, link: string | null, name?: string, asOffi
     `<p>${escapeHtml(iphone)}</p>`,
     `<p>${escapeHtml(android)}</p>`,
     `<p>${escapeHtml(notify)}</p>`,
+    ...(guide ? [`<p>${escapeHtml(guide)}</p>`] : []),
     `<p>${escapeHtml(help)}</p>`,
     '<p>Cheers,<br>Rural Roster Team</p>',
   ].join('\n');
