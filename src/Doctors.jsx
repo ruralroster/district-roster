@@ -7,6 +7,9 @@ const emptyInvite = { name: '', email: '', homeSiteId: '', skills: ['Emergency']
 export default function Doctors({ districtId, sites }) {
   const [doctors, setDoctors] = useState([]);
   const [invite, setInvite] = useState(emptyInvite);
+  const [officerInvite, setOfficerInvite] = useState({ name: '', email: '', siteId: '' });
+  const [officerError, setOfficerError] = useState('');
+  const [officerMessage, setOfficerMessage] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -100,6 +103,39 @@ export default function Doctors({ districtId, sites }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // A new officer for a site: on the pending list, then invited as an
+  // officer (not a doctor), so they only see the officer side.
+  async function sendOfficerInvite(e) {
+    e.preventDefault();
+    const { name, siteId } = officerInvite;
+    const email = officerInvite.email.trim().toLowerCase();
+    setBusy(true);
+    setOfficerError('');
+    setOfficerMessage('');
+    const { error: addError } = await supabase.rpc('add_pending_site_officer', { p_site_id: siteId, p_email: email, p_name: name });
+    if (addError) {
+      setBusy(false);
+      setOfficerError(addError.message);
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('invite-district-doctor', {
+      body: { districtId, officerEmails: [email], redirectTo: appUrl },
+    });
+    setBusy(false);
+    const failure = error ? await functionError(error) : data?.error ?? data?.data?.results?.find((r) => r.error)?.error;
+    if (failure) {
+      setOfficerError(`${failure}. They're under Officers not invited yet: try Invite there, or give them a one-time password.`);
+      load();
+      return;
+    }
+    const r = data?.data?.results?.[0];
+    setOfficerMessage(r?.invited
+      ? `Invite sent to ${email}. They become an officer of ${siteName(siteId)} once they've set their password.`
+      : `${email} already had a login (e.g. Rstar), so they're now an officer of ${siteName(siteId)}${r?.emailed ? ' and have been emailed to sign in with it' : ", but the email didn't send: tell them to sign in with their Rstar email and password"}.`);
+    setOfficerInvite({ name: '', email: '', siteId: '' });
+    load();
+  }
 
   async function sendInvite(e) {
     e.preventDefault();
@@ -228,6 +264,31 @@ export default function Doctors({ districtId, sites }) {
           </ul>
         </div>
       )}
+
+      <form className="card stack" onSubmit={sendOfficerInvite}>
+        <h2>Invite an officer</h2>
+        <p className="small muted">A rostering officer for a site. They get the officer side only (Calendar, Swaps, Doctors, Insights, Sites), not a doctor's, and aren't on the doctors list.</p>
+        <label>
+          Name
+          <input value={officerInvite.name} onChange={(e) => setOfficerInvite({ ...officerInvite, name: e.target.value })} required />
+        </label>
+        <label>
+          Email
+          <input type="email" value={officerInvite.email} onChange={(e) => setOfficerInvite({ ...officerInvite, email: e.target.value })} required />
+        </label>
+        <label>
+          Site
+          <select value={officerInvite.siteId} onChange={(e) => setOfficerInvite({ ...officerInvite, siteId: e.target.value })} required>
+            <option value="">Pick a site</option>
+            {sites.map((s) => (
+              <option key={s.site_id} value={s.site_id}>{s.name}</option>
+            ))}
+          </select>
+        </label>
+        {officerError && <p className="error">{officerError}</p>}
+        {officerMessage && <p className="ok">{officerMessage}</p>}
+        <button type="submit" disabled={busy}>Send officer invite</button>
+      </form>
 
       <form className="card stack" onSubmit={sendInvite}>
         <h2>Invite a doctor</h2>
