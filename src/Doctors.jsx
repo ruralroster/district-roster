@@ -323,6 +323,9 @@ export default function Doctors({ districtId, sites }) {
                   <strong>{email}</strong>
                   <div className="muted small">{officers.filter((o) => o.email === email).map((o) => siteName(o.site_id)).join(', ')}</div>
                 </div>
+                <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ officerEmail: email }, email, true)}>
+                  One-time password
+                </button>
                 {addSiteControl(email, false, officers.filter((o) => o.email === email).map((o) => o.site_id))}
               </li>
             ))}
