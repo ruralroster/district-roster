@@ -15,6 +15,8 @@ export default function Doctors({ districtId, sites }) {
   const [officerMessage, setOfficerMessage] = useState('');
   // Add site beside an officer: { email, pending, siteId } while it's open.
   const [addingSite, setAddingSite] = useState(null);
+  // Remove beside an officer with more than one site: { email, siteId }.
+  const [removing, setRemoving] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,7 +42,7 @@ export default function Doctors({ districtId, sites }) {
     const [{ data: pending }, { data: current }] = siteIds.length
       ? await Promise.all([
         supabase.from('site_officer_pending').select('site_id, email, name').in('site_id', siteIds).order('email'),
-        supabase.from('site_officers').select('site_id, email').in('site_id', siteIds).order('email'),
+        supabase.from('site_officers').select('*').in('site_id', siteIds).order('email'),
       ])
       : [{ data: [] }, { data: [] }];
     setPendingOfficers(pending ?? []);
@@ -50,6 +52,7 @@ export default function Doctors({ districtId, sites }) {
   const uninvited = doctors.filter((d) => d.active && !d.user_id);
   const officerEmails = [...new Set(pendingOfficers.map((o) => o.email))];
   const currentOfficerEmails = [...new Set(officers.map((o) => o.email))];
+  const officerName = (email) => officers.find((o) => o.email === email && o.name)?.name;
   const rstarSites = sites.filter((s) => s.department_id);
 
   // Invites doctors (by id) and officers (by email) already on the list.
@@ -181,6 +184,61 @@ export default function Doctors({ districtId, sites }) {
     setAddingSite(null);
     load();
   }
+
+  async function editOfficerName(email) {
+    const name = window.prompt(`Name for ${email}:`, officerName(email) ?? '');
+    if (name === null) return;
+    setBusy(true);
+    setBulkError('');
+    setBulkMessage('');
+    const { error } = await supabase.rpc('set_site_officer_name', { p_district_id: districtId, p_email: email, p_name: name });
+    setBusy(false);
+    if (error) setBulkError(error.message);
+    load();
+  }
+
+  // Remove: from one site, or (siteId null) every site here. Their login
+  // stays.
+  async function removeOfficer(email, siteId, label) {
+    const where = siteId ? siteName(siteId) : 'every site in this district';
+    if (!window.confirm(`Remove ${label} as an officer of ${where}? They keep their login, but stop seeing the officer side for ${siteId ? 'that site' : 'these sites'}. If they're also an Rstar officer at a linked site, that's managed in Rstar.`)) return;
+    setBusy(true);
+    setBulkError('');
+    setBulkMessage('');
+    const { error } = await supabase.rpc('remove_site_officer', { p_district_id: districtId, p_email: email, p_site_id: siteId });
+    setBusy(false);
+    if (error) setBulkError(error.message);
+    else setBulkMessage(`${label} is no longer an officer of ${where}.`);
+    setRemoving(null);
+    load();
+  }
+
+  // The Remove button: straight to the check for one site, or a choice of
+  // site (or all of them) for more.
+  const removeControl = (email, label, haveSites) => {
+    if (removing?.email !== email) {
+      return (
+        <button
+          className="secondary"
+          disabled={busy}
+          onClick={() => (haveSites.length === 1 ? removeOfficer(email, haveSites[0], label) : setRemoving({ email, siteId: '' }))}
+        >
+          Remove
+        </button>
+      );
+    }
+    return (
+      <span className="inline">
+        <select value={removing.siteId} onChange={(e) => setRemoving({ ...removing, siteId: e.target.value })} aria-label={`Site to remove ${label} from`}>
+          <option value="">Pick</option>
+          <option value="all">All their sites</option>
+          {haveSites.map((id) => <option key={id} value={id}>{siteName(id)}</option>)}
+        </select>
+        <button disabled={busy || !removing.siteId} onClick={() => removeOfficer(email, removing.siteId === 'all' ? null : removing.siteId, label)}>Remove</button>
+        <button className="secondary" onClick={() => setRemoving(null)}>Cancel</button>
+      </span>
+    );
+  };
 
   // The Add site button, or the site picker once it's tapped. haveSites:
   // the sites they're already officer of.
@@ -320,13 +378,20 @@ export default function Doctors({ districtId, sites }) {
             {currentOfficerEmails.map((email) => (
               <li key={email} className="row">
                 <div>
-                  <strong>{email}</strong>
-                  <div className="muted small">{officers.filter((o) => o.email === email).map((o) => siteName(o.site_id)).join(', ')}</div>
+                  <strong>{officerName(email) ?? email}</strong>
+                  <div className="muted small">
+                    {officerName(email) && `${email} · `}
+                    {officers.filter((o) => o.email === email).map((o) => siteName(o.site_id)).join(', ')}
+                  </div>
                 </div>
-                <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ officerEmail: email }, email, true)}>
+                <button className="secondary" disabled={busy} onClick={() => editOfficerName(email)}>
+                  {officerName(email) ? 'Edit name' : 'Add name'}
+                </button>
+                <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ officerEmail: email }, officerName(email) ?? email, true)}>
                   One-time password
                 </button>
                 {addSiteControl(email, false, officers.filter((o) => o.email === email).map((o) => o.site_id))}
+                {removeControl(email, officerName(email) ?? email, officers.filter((o) => o.email === email).map((o) => o.site_id))}
               </li>
             ))}
           </ul>
@@ -351,6 +416,7 @@ export default function Doctors({ districtId, sites }) {
                       One-time password
                     </button>
                     {addSiteControl(email, true, rows.map((o) => o.site_id))}
+                    {removeControl(email, rows.find((o) => o.name)?.name ?? email, rows.map((o) => o.site_id))}
                   </li>
                 );
               })}
