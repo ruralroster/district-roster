@@ -12,7 +12,8 @@
 // Deploy: `supabase functions deploy district-temp-password`
 // Uses the same SUPABASE_SERVICE_ROLE_KEY secret as invite-district-doctor.
 //
-// Request:  { districtId, doctorId } or { districtId, officerEmail }
+// Request:  { districtId, doctorId } or { districtId, officerEmail } (an
+// officer here, or one waiting for a login)
 // Response: { data: { tempPassword, name, email, mfaWasReset } } | { error }
 //
 // Emailing it (the panel's "Email it to them"): sent from GMAIL_USER
@@ -118,27 +119,29 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!doctor) return json({ error: 'No such doctor in this district' }, 404);
     ({ name, email, user_id: userId } = doctor);
-  } else if (body.emailPassword !== undefined) {
-    // By now they're a site officer here (their login was made when the
-    // password was).
+  } else {
+    // An officer here already (they have a login), or one still waiting
+    // for a login (site_officer_pending).
     const { data: officer } = await adminClient
       .from('site_officers')
-      .select('user_id, sites!inner(district_id)')
+      .select('*, sites!inner(district_id)')
       .eq('sites.district_id', districtId)
       .ilike('email', officerEmail!)
       .limit(1);
-    if (!officer?.length) return json({ error: 'No officer with that email in this district' }, 404);
-    userId = officer[0].user_id;
-    email = officerEmail!;
-  } else {
-    const { data: pending } = await adminClient
-      .from('site_officer_pending')
-      .select('site_id, name, sites!inner(district_id)')
-      .eq('sites.district_id', districtId)
-      .eq('email', officerEmail);
-    if (!pending?.length) return json({ error: 'No officer waiting for a login with that email in this district' }, 404);
-    name = pending.find((p) => p.name)?.name ?? null;
-    email = officerEmail!;
+    if (officer?.length) {
+      userId = officer[0].user_id;
+      name = officer[0].name ?? null;
+      email = officerEmail!;
+    } else {
+      const { data: pending } = await adminClient
+        .from('site_officer_pending')
+        .select('site_id, name, sites!inner(district_id)')
+        .eq('sites.district_id', districtId)
+        .eq('email', officerEmail);
+      if (!pending?.length) return json({ error: 'No officer with that email in this district' }, 404);
+      name = pending.find((p) => p.name)?.name ?? null;
+      email = officerEmail!;
+    }
   }
 
   if (body.emailPassword !== undefined) {

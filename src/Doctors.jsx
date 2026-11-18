@@ -111,8 +111,12 @@ export default function Doctors({ districtId, sites }) {
     const { data, error } = await supabase.functions.invoke('district-temp-password', { body: { districtId, ...target } });
     setBusy(false);
     const failure = error ? await functionError(error) : data?.error;
-    if (failure) setBulkError(failure);
-    else setTemp({ ...data.data, target });
+    // An alert, not just the banner at the top: the button may be far
+    // down the page.
+    if (failure) {
+      setBulkError(failure);
+      window.alert(`Couldn't make a one-time password for ${label}: ${failure}`);
+    } else setTemp({ ...data.data, target });
     load();
   }
 
