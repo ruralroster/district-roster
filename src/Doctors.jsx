@@ -15,6 +15,8 @@ export default function Doctors({ districtId, sites }) {
   const [busy, setBusy] = useState(false);
   // Officers named (e.g. by the v3 import) who have no login yet.
   const [pendingOfficers, setPendingOfficers] = useState([]);
+  // Officers with a login: site_officers rows ({ site_id, email }).
+  const [officers, setOfficers] = useState([]);
   const [bulkMessage, setBulkMessage] = useState('');
   const [bulkError, setBulkError] = useState('');
   // The one-time password just made: { name, email, tempPassword, mfaWasReset }.
@@ -30,14 +32,20 @@ export default function Doctors({ districtId, sites }) {
     if (error) setError(error.message);
     setDoctors(data ?? []);
     const siteIds = sites.map((s) => s.site_id);
-    const { data: pending } = siteIds.length
-      ? await supabase.from('site_officer_pending').select('site_id, email, name').in('site_id', siteIds).order('email')
-      : { data: [] };
+    const [{ data: pending }, { data: current }] = siteIds.length
+      ? await Promise.all([
+        supabase.from('site_officer_pending').select('site_id, email, name').in('site_id', siteIds).order('email'),
+        supabase.from('site_officers').select('site_id, email').in('site_id', siteIds).order('email'),
+      ])
+      : [{ data: [] }, { data: [] }];
     setPendingOfficers(pending ?? []);
+    setOfficers(current ?? []);
   }, [districtId, sites]);
 
   const uninvited = doctors.filter((d) => d.active && !d.user_id);
   const officerEmails = [...new Set(pendingOfficers.map((o) => o.email))];
+  const currentOfficerEmails = [...new Set(officers.map((o) => o.email))];
+  const rstarSites = sites.filter((s) => s.department_id);
 
   // Invites doctors (by id) and officers (by email) already on the list.
   async function inviteExisting(doctorIds, emails, what) {
@@ -239,56 +247,51 @@ export default function Doctors({ districtId, sites }) {
         </ul>
       </div>
 
-      {officerEmails.length > 0 && (
-        <div className="card">
-          <h2>Officers not invited yet</h2>
-          <p className="small muted">Named as officers (e.g. from v3) but with no login. Inviting them makes them officers of these sites when they sign up.</p>
+      <div className="card">
+        <h2>Officers</h2>
+        <p className="small muted">
+          Rostering officers see only the officer side of DR App, not a doctor's.
+          {rstarSites.length > 0 && ` ${rstarSites.map((s) => s.name).join(', ')} ${rstarSites.length === 1 ? 'is' : 'are'} linked to Rstar, so Rstar's officers there are officers here too and aren't listed.`}
+        </p>
+        {currentOfficerEmails.length === 0 && officerEmails.length === 0 && <p className="muted">No other officers yet.</p>}
+        {currentOfficerEmails.length > 0 && (
           <ul className="rows">
-            {officerEmails.map((email) => {
-              const rows = pendingOfficers.filter((o) => o.email === email);
-              return (
-                <li key={email} className="row">
-                  <div>
-                    <strong>{rows.find((o) => o.name)?.name ?? email}</strong>
-                    <div className="muted small">{email} · {rows.map((o) => siteName(o.site_id)).join(', ')}</div>
-                  </div>
-                  <button className="secondary" disabled={busy} onClick={() => inviteExisting([], [email], rows.find((o) => o.name)?.name ?? email)}>
-                    Invite
-                  </button>
-                  <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ officerEmail: email }, rows.find((o) => o.name)?.name ?? email)}>
-                    One-time password
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
-      <form className="card stack" onSubmit={sendOfficerInvite}>
-        <h2>Invite an officer</h2>
-        <p className="small muted">A rostering officer for a site. They get the officer side only (Calendar, Swaps, Doctors, Insights, Sites), not a doctor's, and aren't on the doctors list.</p>
-        <label>
-          Name
-          <input value={officerInvite.name} onChange={(e) => setOfficerInvite({ ...officerInvite, name: e.target.value })} required />
-        </label>
-        <label>
-          Email
-          <input type="email" value={officerInvite.email} onChange={(e) => setOfficerInvite({ ...officerInvite, email: e.target.value })} required />
-        </label>
-        <label>
-          Site
-          <select value={officerInvite.siteId} onChange={(e) => setOfficerInvite({ ...officerInvite, siteId: e.target.value })} required>
-            <option value="">Pick a site</option>
-            {sites.map((s) => (
-              <option key={s.site_id} value={s.site_id}>{s.name}</option>
+            {currentOfficerEmails.map((email) => (
+              <li key={email} className="row">
+                <div>
+                  <strong>{email}</strong>
+                  <div className="muted small">{officers.filter((o) => o.email === email).map((o) => siteName(o.site_id)).join(', ')}</div>
+                </div>
+              </li>
             ))}
-          </select>
-        </label>
-        {officerError && <p className="error">{officerError}</p>}
-        {officerMessage && <p className="ok">{officerMessage}</p>}
-        <button type="submit" disabled={busy}>Send officer invite</button>
-      </form>
+          </ul>
+        )}
+        {officerEmails.length > 0 && (
+          <>
+            <h3>Not invited yet</h3>
+            <p className="small muted">Named as officers (e.g. from v3) but with no login. Inviting them makes them officers of these sites when they sign up.</p>
+            <ul className="rows">
+              {officerEmails.map((email) => {
+                const rows = pendingOfficers.filter((o) => o.email === email);
+                return (
+                  <li key={email} className="row">
+                    <div>
+                      <strong>{rows.find((o) => o.name)?.name ?? email}</strong>
+                      <div className="muted small">{email} · {rows.map((o) => siteName(o.site_id)).join(', ')}</div>
+                    </div>
+                    <button className="secondary" disabled={busy} onClick={() => inviteExisting([], [email], rows.find((o) => o.name)?.name ?? email)}>
+                      Invite
+                    </button>
+                    <button className="secondary" disabled={busy} onClick={() => giveTempPassword({ officerEmail: email }, rows.find((o) => o.name)?.name ?? email)}>
+                      One-time password
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
 
       <form className="card stack" onSubmit={sendInvite}>
         <h2>Invite a doctor</h2>
@@ -316,6 +319,30 @@ export default function Doctors({ districtId, sites }) {
         {error && <p className="error">{error}</p>}
         {message && <p className="ok">{message}</p>}
         <button type="submit" disabled={busy}>Send invite</button>
+      </form>
+      <form className="card stack" onSubmit={sendOfficerInvite}>
+        <h2>Invite an officer</h2>
+        <p className="small muted">A rostering officer for a site. They get the officer side only (Calendar, Swaps, Staff, Insights, Sites), not a doctor's, and aren't on the doctors list.</p>
+        <label>
+          Name
+          <input value={officerInvite.name} onChange={(e) => setOfficerInvite({ ...officerInvite, name: e.target.value })} required />
+        </label>
+        <label>
+          Email
+          <input type="email" value={officerInvite.email} onChange={(e) => setOfficerInvite({ ...officerInvite, email: e.target.value })} required />
+        </label>
+        <label>
+          Site
+          <select value={officerInvite.siteId} onChange={(e) => setOfficerInvite({ ...officerInvite, siteId: e.target.value })} required>
+            <option value="">Pick a site</option>
+            {sites.map((s) => (
+              <option key={s.site_id} value={s.site_id}>{s.name}</option>
+            ))}
+          </select>
+        </label>
+        {officerError && <p className="error">{officerError}</p>}
+        {officerMessage && <p className="ok">{officerMessage}</p>}
+        <button type="submit" disabled={busy}>Send officer invite</button>
       </form>
     </div>
   );

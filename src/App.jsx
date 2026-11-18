@@ -110,7 +110,7 @@ function Home({ user }) {
     (me || officerSiteIds.size > 0) && ['calendar', 'Calendar'],
     (me || officerSiteIds.size > 0) && ['swaps', 'Swaps'],
     (me || officerSiteIds.size > 0 || isSuperAdmin) && ['profile', me ? 'My profile' : 'My account'],
-    isOfficer && ['doctors', 'Doctors'],
+    isOfficer && ['doctors', 'Staff'],
     isOfficer && ['insights', 'Insights'],
     officerSiteIds.size > 0 && ['sites', 'Sites'],
     isSuperAdmin && ['admin', 'Admin'],

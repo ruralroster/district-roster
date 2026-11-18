@@ -167,8 +167,8 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           <Section title="Sites and doctors">
             <ul>
               <li><strong>Sites</strong>: add and remove each site's shift types, choose its colour, and set how long gaps stay local before coming here.</li>
-              <li><strong>Doctors</strong>: invite doctors, set their level, and deactivate anyone who's left.</li>
-              <li><strong>Invite an officer</strong> (Doctors tab): a new rostering officer for a site, by name, email and site. They see only the officer side, not a doctor's. If they already have a login (e.g. Rstar) they're made an officer of that site straight away and emailed to sign in with it.</li>
+              <li><strong>Staff</strong>: doctors first (invite them, set their level, deactivate anyone who's left), then officers.</li>
+              <li><strong>Invite an officer</strong> (Staff tab): a new rostering officer for a site, by name, email and site. They see only the officer side, not a doctor's. If they already have a login (e.g. Rstar) they're made an officer of that site straight away and emailed to sign in with it.</li>
               <li><strong>Insights</strong>: how your district's vacancies are going over the last 30 days, 90 days or 12 months: the share filled in DR App, where every other vacancy went (covered locally on Rstar, agency, closed, ran short), how fast and how far ahead, closures averted, shifts covered by doctors from other sites, and how many doctors are willing to work at each site. <strong>Download CSV</strong> gives every measure per site, to share with your LHD.</li>
               <li>When you cancel a shift, you're asked why (a local doctor's been rostered on Rstar, an agency or locum is doing it, filled some other way, no longer needed, or the service is closing). Insights counts each reason, which is how it shows what went to agency. If a doctor on DR App is doing it, use <strong>Mark filled by…</strong> instead, so it counts as filled.</li>
               <li><strong>What happened to these shifts?</strong> at the top of Calendar lists your sites' shifts that started while still open. Say who did each one, or why nobody did, and Save. Nobody is emailed. Until you answer, Insights counts them as no outcome recorded.</li>
@@ -192,8 +192,8 @@ export default function Help({ isDoctor, isOfficer, isSuperAdmin }) {
           <Section title="Importing from v3">
             <ul>
               <li><strong>Import from v3</strong> reads the v3 roster sheet export: people (doctors and officers, with their real email addresses), shift types and vacancies from today on. TestHub, Cairns and Telehealth are left out.</li>
-              <li>Check the preview: guessed emails are marked. Nobody is emailed an invite by the import; send invites from the Doctors tab when you're ready.</li>
-              <li>Doctors start as consultants with the skills from v3; set their levels on the Doctors tab.</li>
+              <li>Check the preview: guessed emails are marked. Nobody is emailed an invite by the import; send invites from the Staff tab when you're ready.</li>
+              <li>Doctors start as consultants with the skills from v3; set their levels on the Staff tab.</li>
             </ul>
           </Section>
         </div>
