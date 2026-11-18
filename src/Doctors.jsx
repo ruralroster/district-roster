@@ -450,10 +450,14 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, target, district
     setEmailStatus(failure || 'sent');
   }
 
+  // A pop-up, so it shows wherever the button was pressed. Only Done
+  // closes it: the password isn't shown again.
   return (
-    <div className="card stack">
+    <div className="dialog-backdrop">
+      <div className="dialog card stack" role="dialog" aria-modal="true" aria-labelledby="temp-password-title">
+      <h2 id="temp-password-title">One-time password</h2>
       <p>
-        One-time password for <strong>{name ?? email}</strong> ({email}):
+        For <strong>{name ?? email}</strong> ({email}):
       </p>
       <p style={{ fontFamily: 'monospace', fontSize: '1.4rem', letterSpacing: '0.08em', margin: 0 }}>{tempPassword}</p>
       <p className="small muted">
@@ -472,6 +476,7 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, target, district
         )}
         <button className="secondary" onClick={copy}>{copied ? 'Copied' : 'Copy password'}</button>
         <button className="secondary" onClick={onClose}>Done</button>
+      </div>
       </div>
     </div>
   );
