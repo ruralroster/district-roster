@@ -429,6 +429,36 @@ export default function Doctors({ districtId, sites }) {
 // (district-temp-password's emailPassword), or by text or in person.
 function TempPassword({ name, email, tempPassword, mfaWasReset, target, districtId, onClose }) {
   const [copied, setCopied] = useState(false);
+  const [messageCopied, setMessageCopied] = useState(false);
+  // The whole message, ready to paste into WhatsApp, SMS or anything else.
+  const firstName = (name || '').split(/\s+/).filter((w) => w && !/^(Dr|Mr|Mrs|Ms|Prof)\.?$/i.test(w))[0] || '';
+  const message = [
+    `Hi${firstName ? ` ${firstName}` : ''}, here's your login for DR App:`,
+    '',
+    appUrl,
+    `Email: ${email}`,
+    `One-time password: ${tempPassword}`,
+    '',
+    "When you sign in with it, you'll be asked to choose your own password. It works in Rstar too.",
+  ].join('\n');
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
+
+  async function share() {
+    try {
+      await navigator.share({ text: message });
+    } catch {
+      // Cancelled, or not allowed: Copy message still works.
+    }
+  }
+
+  async function copyMessage() {
+    try {
+      await navigator.clipboard.writeText(message);
+      setMessageCopied(true);
+    } catch {
+      setMessageCopied(false);
+    }
+  }
   // null, 'sending', 'sent' or an error message.
   const [emailStatus, setEmailStatus] = useState(null);
 
@@ -460,6 +490,7 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, target, district
         For <strong>{name ?? email}</strong> ({email}):
       </p>
       <p style={{ fontFamily: 'monospace', fontSize: '1.4rem', letterSpacing: '0.08em', margin: 0 }}>{tempPassword}</p>
+      <pre className="small" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{message}</pre>
       <p className="small muted">
         It's shown only now. Email it to them (it's sent from ruralroster@gmail.com), or text or tell them.
         {mfaWasReset && ' Their two-factor was turned off; they can turn it back on in My profile.'}
@@ -474,6 +505,8 @@ function TempPassword({ name, email, tempPassword, mfaWasReset, target, district
             {emailStatus === 'sending' ? 'Sending…' : 'Email it to them'}
           </button>
         )}
+        {canShare && <button className="secondary" onClick={share}>Send by WhatsApp or text</button>}
+        <button className="secondary" onClick={copyMessage}>{messageCopied ? 'Message copied' : 'Copy message'}</button>
         <button className="secondary" onClick={copy}>{copied ? 'Copied' : 'Copy password'}</button>
         <button className="secondary" onClick={onClose}>Done</button>
       </div>
