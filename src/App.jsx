@@ -222,7 +222,7 @@ function Home({ user }) {
         </div>
       )}
       {activeTab === 'doctors' && <Doctors districtId={districtId} sites={sites} />}
-      {activeTab === 'insights' && <Insights districtId={districtId} districtName={district?.name} />}
+      {activeTab === 'insights' && <Insights districtId={districtId} districtName={district?.name} siteList={sites} />}
       {activeTab === 'sites' && <Sites districtId={districtId} sites={sites} officerSiteIds={officerSiteIds} onChanged={reload} />}
       {activeTab === 'admin' && <Admin districts={districts} onChanged={reload} />}
       {activeTab === 'swaps' && <Swaps districtId={districtId} sites={sites} me={me} officerSiteIds={officerSiteIds} />}

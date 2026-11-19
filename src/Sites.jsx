@@ -87,6 +87,7 @@ export default function Sites({ districtId, sites, officerSiteIds, onChanged }) 
               {canEdit && <AddShiftType siteId={s.site_id} run={run} />}
               {canEdit && <SiteColour site={s} hue={hues.get(s.site_id)} onChanged={onChanged} />}
               <Escalation site={s} canEdit={canEdit} onChanged={onChanged} />
+              <ShiftCosts site={s} canEdit={canEdit} onChanged={onChanged} />
             </li>
           );
         })}
@@ -116,6 +117,45 @@ function AddShiftType({ siteId, run }) {
         ))}
       </select>
       <button type="submit" className="secondary">Add shift type</button>
+    </form>
+  );
+}
+
+// What a shift costs the site with an agency or locum doctor and with a
+// district doctor, for Insights' agency cost avoided (the business case).
+function ShiftCosts({ site, canEdit, onChanged }) {
+  const [agency, setAgency] = useState(site.agency_shift_cost ?? '');
+  const [internal, setInternal] = useState(site.internal_shift_cost ?? '');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const changed = String(site.agency_shift_cost ?? '') !== String(agency) || String(site.internal_shift_cost ?? '') !== String(internal);
+
+  async function save(e) {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    const value = (v) => (v === '' ? null : Number(v));
+    const { error } = await supabase.rpc('set_site_shift_costs', { p_site_id: site.site_id, p_agency: value(agency), p_internal: value(internal) });
+    if (error) return setError(error.message);
+    setMessage('Saved.');
+    onChanged();
+  }
+
+  const money = (v) => (v == null ? 'not set' : `$${Number(v).toLocaleString('en-AU')}`);
+  if (!canEdit) return <p className="small muted">A shift costs {money(site.agency_shift_cost)} with agency, {money(site.internal_shift_cost)} with a district doctor.</p>;
+  return (
+    <form className="inline small" onSubmit={save}>
+      <label className="inline">
+        A shift costs $
+        <input type="number" min="0" step="1" value={agency} onChange={(e) => setAgency(e.target.value)} className="hours-input" aria-label="Agency cost per shift" />
+        with an agency or locum doctor (fees, travel, accommodation), and $
+        <input type="number" min="0" step="1" value={internal} onChange={(e) => setInternal(e.target.value)} className="hours-input" aria-label="District doctor cost per shift" />
+        with a district doctor
+      </label>
+      {changed && <button type="submit" className="secondary">Save</button>}
+      {message && <span className="ok">{message}</span>}
+      {error && <span className="error">{error}</span>}
+      <span className="muted">Insights uses these to estimate the agency cost avoided.</span>
     </form>
   );
 }

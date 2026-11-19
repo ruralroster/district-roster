@@ -74,7 +74,7 @@ function csv(rows, from, to) {
   URL.revokeObjectURL(a.href);
 }
 
-export default function Insights({ districtId, districtName }) {
+export default function Insights({ districtId, districtName, siteList = [] }) {
   const [period, setPeriod] = useState('90');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -98,6 +98,16 @@ export default function Insights({ districtId, districtName }) {
   const rows = data?.sites ?? [];
   const all = rows.find((r) => r.site_id === null);
   const sites = rows.filter((r) => r.site_id !== null);
+  // Agency cost avoided (estimate): each site's DR App fills x (its agency
+  // shift cost - its district doctor cost), for sites that have set both
+  // on the Sites tab.
+  const saving = (r) => {
+    const site = siteList.find((s) => s.site_id === r.site_id);
+    if (site?.agency_shift_cost == null || site?.internal_shift_cost == null) return null;
+    return (r.filled || 0) * Math.max(0, Number(site.agency_shift_cost) - Number(site.internal_shift_cost));
+  };
+  const costedSites = sites.filter((r) => saving(r) !== null);
+  const avoided = costedSites.reduce((t, r) => t + saving(r), 0);
 
   return (
     <div className="stack">
@@ -128,6 +138,13 @@ export default function Insights({ districtId, districtName }) {
             <Tile label="Escalated from Rstar, then filled" value={`${all.escalated_filled}`} detail={`of ${all.escalated} escalated`} />
             <Tile label="Went to agency or locum" value={`${all.agency}`} detail={`${all.service_closed} closed the service, ${all.went_unfilled} ran short`} />
             <Tile label="Doctors on DR App" value={`${all.doctors_ticked}`} detail={`${all.applicants_per_vacancy ?? 0} applicants per vacancy`} />
+            <Tile
+              label="Agency cost avoided (estimate)"
+              value={costedSites.length ? `$${Math.round(avoided).toLocaleString('en-AU')}` : '—'}
+              detail={costedSites.length
+                ? `${costedSites.length} of ${sites.length} site${sites.length === 1 ? '' : 's'} costed, if each DR App fill would otherwise have gone to agency`
+                : 'set each site’s shift costs on the Sites tab'}
+            />
           </div>
         )}
         {data && !(all?.posted > 0) && <p className="muted">No district vacancies in this period yet.</p>}
